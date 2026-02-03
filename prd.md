@@ -44,6 +44,9 @@ There is no single, machine-readable definition of "what env vars does this proj
 - **Value validation** — No regex or enum validation on resolved values (deferred to v2)
 - **Schema inheritance** — Schemas are not composable; each schema is standalone
 - **Secrets masking in output file** — The tool writes real values to the output file; masking is only applied to stdout
+- **Secret rotation automation** — The schema documents *where* to rotate secrets, but the tool does not perform rotation itself
+- **Cloud provider SDK integration** — No native API calls to AWS, GCP, 1Password, etc.; all external sources are invoked through shell commands
+- **`.env` file parsing or import** — The tool only *writes* `.env` files; it does not read existing ones or merge with them
 
 ---
 
@@ -736,3 +739,5 @@ envtool pull -s config/backend.env-schema.yaml -o /tmp/test.env --force
 3. **`--parallel` flag** — Should there be an opt-out `--sequential` flag for environments with rate-limited secret managers?
 4. **Push to sources** — Should a future `envtool push` command write values back to secret managers?
 5. **Local caching** — Should resolved values be cached in `.envtool-cache` to speed up repeated pulls during development?
+6. **CI/CD pipeline integration** — Built-in GitHub Actions, Cloud Build plugins, etc. Currently the binary is meant to be called directly.
+7. **Variable dependency ordering** — Support for one variable referencing another variable's resolved value (e.g., `DATABASE_URL` composed from `DB_HOST` + `DB_PORT`).
