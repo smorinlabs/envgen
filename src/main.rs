@@ -60,6 +60,21 @@ enum Commands {
         timeout: u64,
     },
 
+    /// Create a sample schema file
+    Init {
+        /// Output path (file or directory)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Overwrite the destination file if it already exists
+        #[arg(short, long)]
+        force: bool,
+
+        /// Suppress success output
+        #[arg(short, long)]
+        quiet: bool,
+    },
+
     /// Validate a schema file for correctness
     Check {
         /// Path to schema YAML file
@@ -99,6 +114,24 @@ async fn main() {
     let cli = Cli::parse();
 
     let exit_code = match cli.command {
+        Commands::Init {
+            ref output,
+            force,
+            quiet,
+        } => {
+            let opts = commands::init::InitOptions {
+                output_path: output.clone(),
+                force,
+                quiet,
+            };
+            match commands::init::run_init(opts) {
+                Ok(()) => 0,
+                Err(e) => {
+                    eprintln!("Error: {:#}", e);
+                    1
+                }
+            }
+        }
         Commands::Check { ref schema } => {
             let schema_path = resolve_schema_path(&cli.schema, schema);
             match commands::check::run_check(&schema_path) {

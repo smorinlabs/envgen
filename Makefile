@@ -2,6 +2,10 @@
 # Common invocations for development and environment setup
 
 ENVGEN := cargo run --
+YAMLLINT ?= yamllint
+YAMLFMT ?= yamlfmt
+
+YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
 
 # ─── Build & Test ────────────────────────────────────────────────
 
@@ -29,6 +33,37 @@ fmt: ## Format all code
 .PHONY: install
 install: ## Install envgen to ~/.cargo/bin
 	cargo install --path .
+
+# ─── YAML Lint & Format (Fixtures) ──────────────────────────────
+
+.PHONY: install-yamllint
+install-yamllint: ## Install yamllint (Python)
+	python3 -m pip install --user yamllint
+
+.PHONY: install-yamlfmt
+install-yamlfmt: ## Install yamlfmt (Go)
+	go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+
+.PHONY: install-yaml-tools
+install-yaml-tools: install-yamllint install-yamlfmt ## Install YAML lint/format tools
+
+.PHONY: yaml-lint-fixtures
+yaml-lint-fixtures: ## Lint YAML schemas in tests/fixtures
+	@command -v $(YAMLLINT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLLINT) not found. Run: make install-yamllint"; exit 1; }
+	$(YAMLLINT) -c .yamllint.yml $(YAML_FIXTURES)
+
+.PHONY: yaml-fmt-fixtures
+yaml-fmt-fixtures: ## Format YAML schemas in tests/fixtures
+	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yamlfmt"; exit 1; }
+	$(YAMLFMT) -no_global_conf -conf .yamlfmt $(YAML_FIXTURES)
+
+.PHONY: yaml-fmt-check-fixtures
+yaml-fmt-check-fixtures: ## Check YAML formatting in tests/fixtures
+	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yamlfmt"; exit 1; }
+	$(YAMLFMT) -no_global_conf -conf .yamlfmt -lint $(YAML_FIXTURES)
+
+.PHONY: check-yaml-fixtures
+check-yaml-fixtures: yaml-lint-fixtures yaml-fmt-check-fixtures ## Lint + format-check YAML schemas in tests/fixtures
 
 # ─── Schema Validation ──────────────────────────────────────────
 
