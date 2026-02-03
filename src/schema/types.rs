@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-/// Top-level schema structure for an envtool YAML schema file.
+/// Top-level schema structure for an envgen YAML schema file.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Schema {
     pub schema_version: String,

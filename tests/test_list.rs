@@ -1,13 +1,14 @@
+use assert_cmd::cargo::cargo_bin_cmd;
 use assert_cmd::Command;
 use predicates::prelude::*;
 
-fn envtool() -> Command {
-    Command::cargo_bin("envtool").unwrap()
+fn envgen() -> Command {
+    cargo_bin_cmd!("envgen")
 }
 
 #[test]
 fn test_list_table_output() {
-    envtool()
+    envgen()
         .arg("list")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -21,7 +22,7 @@ fn test_list_table_output() {
 
 #[test]
 fn test_list_with_env_filter() {
-    envtool()
+    envgen()
         .arg("list")
         .arg("-s")
         .arg("tests/fixtures/valid_backend.yaml")
@@ -35,7 +36,7 @@ fn test_list_with_env_filter() {
 
 #[test]
 fn test_list_json_format() {
-    envtool()
+    envgen()
         .arg("list")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -50,7 +51,7 @@ fn test_list_json_format() {
 
 #[test]
 fn test_list_invalid_env() {
-    envtool()
+    envgen()
         .arg("list")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -63,7 +64,7 @@ fn test_list_invalid_env() {
 
 #[test]
 fn test_list_invalid_format() {
-    envtool()
+    envgen()
         .arg("list")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")

@@ -10,7 +10,7 @@ use std::process;
 
 #[derive(Parser)]
 #[command(
-    name = "envtool",
+    name = "envgen",
     version,
     about = "Generate .env files from declarative YAML schemas"
 )]

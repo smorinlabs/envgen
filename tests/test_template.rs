@@ -1,14 +1,15 @@
+use assert_cmd::cargo::cargo_bin_cmd;
 use assert_cmd::Command;
 use predicates::prelude::*;
 
-fn envtool() -> Command {
-    Command::cargo_bin("envtool").unwrap()
+fn envgen() -> Command {
+    cargo_bin_cmd!("envgen")
 }
 
 #[test]
 fn test_template_expansion_in_dry_run() {
     // The dry-run output should show the effective resolver per environment.
-    envtool()
+    envgen()
         .arg("pull")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -25,7 +26,7 @@ fn test_template_expansion_in_dry_run() {
 
 #[test]
 fn test_template_expansion_staging() {
-    envtool()
+    envgen()
         .arg("pull")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -40,7 +41,7 @@ fn test_template_expansion_staging() {
 #[test]
 fn test_static_template_expansion_in_dry_run() {
     // Static values with {placeholder} references should be shown expanded
-    envtool()
+    envgen()
         .arg("pull")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")

@@ -1,13 +1,14 @@
+use assert_cmd::cargo::cargo_bin_cmd;
 use assert_cmd::Command;
 use predicates::prelude::*;
 
-fn envtool() -> Command {
-    Command::cargo_bin("envtool").unwrap()
+fn envgen() -> Command {
+    cargo_bin_cmd!("envgen")
 }
 
 #[test]
 fn test_check_valid_schema() {
-    envtool()
+    envgen()
         .arg("check")
         .arg("-s")
         .arg("tests/fixtures/valid_frontend.yaml")
@@ -21,7 +22,7 @@ fn test_check_valid_schema() {
 
 #[test]
 fn test_check_valid_backend_schema() {
-    envtool()
+    envgen()
         .arg("check")
         .arg("-s")
         .arg("tests/fixtures/valid_backend.yaml")
@@ -32,7 +33,7 @@ fn test_check_valid_backend_schema() {
 
 #[test]
 fn test_check_invalid_schema() {
-    envtool()
+    envgen()
         .arg("check")
         .arg("-s")
         .arg("tests/fixtures/invalid_schema.yaml")
@@ -45,7 +46,7 @@ fn test_check_invalid_schema() {
 
 #[test]
 fn test_check_missing_file() {
-    envtool()
+    envgen()
         .arg("check")
         .arg("-s")
         .arg("tests/fixtures/does_not_exist.yaml")
@@ -56,7 +57,7 @@ fn test_check_missing_file() {
 
 #[test]
 fn test_check_no_schema_flag() {
-    envtool()
+    envgen()
         .arg("check")
         .assert()
         .failure()
