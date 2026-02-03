@@ -162,7 +162,7 @@ Recognized versions:
 #### `environments` (required)
 Map of environment name → key/value pairs. These values are available as **template variables** in source command templates and in static values.
 
-Reserved keys: `environment` (the environment name itself, always available).
+Reserved keys: `environment` and `key` (built-in placeholders always available in templates).
 
 ```yaml
 environments:
@@ -173,8 +173,10 @@ environments:
 
 Any key defined here can be referenced as `{key_name}` in source commands and static values.
 
-#### `sources` (required)
+#### `sources` (optional)
 Map of source name → source definition.
+
+This field may be omitted (it defaults to an empty map) if all variables are sourced from built-in `static` / `manual`.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -210,6 +212,7 @@ Rules:
 - Resolver `environments` must not overlap.
 - Resolver environments must fully cover the variable's applicable environments.
 - If a resolver uses `source: static`, it must provide `values` for its environments.
+- A resolver may optionally specify `source_key` to override `{key}` for that resolver’s environments (takes precedence over variable-level `source_key`).
 
 ```yaml
 variables:
@@ -237,14 +240,19 @@ variables:
 cargo install envgen
 
 # Or download binary from GitHub releases
+
+# From this repo (development)
+cargo install --path .
+
+# Run without installing
+cargo run -- <command>
 ```
 
 ### 6.2 Global Flags
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--schema <path>` | `-s` | Path to schema YAML file. **Required** for all commands. |
-| `--env <name>` | `-e` | Target environment. Defaults to `local`. |
+| `--schema <path>` | `-s` | Path to schema YAML file. **Required** for `pull`, `check`, and `list`. Can be passed globally or on the subcommand. |
 | `--help` | `-h` | Show help |
 | `--version` | `-V` | Show version |
 
@@ -260,16 +268,20 @@ envgen pull --schema config/frontend.env-schema.yaml --env staging
 
 | Flag | Short | Description |
 |------|-------|-------------|
+| `--env <name>` | `-e` | Target environment. Defaults to `local`. |
 | `--dry-run` | `-n` | Print what would be written and which commands would run, without executing anything. Sensitive values are masked unless `--unmask` is also set. |
 | `--unmask` | | Show actual sensitive values in dry-run output. |
 | `--force` | `-f` | Overwrite the destination file if it already exists. Without this flag, the tool errors if the file exists. |
 | `--non-interactive` | | Skip `manual` source variables instead of prompting. Emit a warning for each skipped variable. |
 | `--output <path>` | `-o` | Override the destination path from the schema. |
+| `--timeout <seconds>` | | Timeout in seconds for source commands (default: 30). |
 
 **Behavior:**
 
 1. Parse and validate the schema file.
-2. Determine the destination file path from `metadata.destination[env]`.
+2. Determine the destination file path:
+   - If `--output` is set, use it.
+   - Otherwise, use `metadata.destination[env]`.
 3. If destination file exists and `--force` is not set → error with message.
 4. For each variable applicable to the target environment:
    - Determine its effective source for that environment:
@@ -278,13 +290,16 @@ envgen pull --schema config/frontend.env-schema.yaml --env staging
    - `static`: Read from the appropriate `values[env]`, expand any `{placeholder}` references.
    - `manual`: Prompt for input (or skip if `--non-interactive`). Show `description` and `source_instructions`.
    - Any other source: Build the command from the source template, substituting `{key}`, `{environment}`, and environment config values. Execute it and capture stdout (trimmed).
-5. If a source command fails (non-zero exit):
-   - Log a warning with the variable name and stderr.
-   - Continue to the next variable (the variable is omitted from output).
-   - At the end, print a summary of failed variables.
-   - Exit with code 1 if any required variable failed.
-6. Write the output file. Include a header comment with generation metadata.
-7. Print a summary: N variables written, M warnings, destination path.
+5. If resolving a variable fails:
+   - The variable is omitted from the output file.
+   - If `required: true`, this counts as a failure and `pull` exits with code 1 (after attempting all variables).
+   - If `required: false`, this is treated as a warning and does not affect exit code.
+   - In `--non-interactive` mode, `manual` variables are always skipped (warning) regardless of `required`.
+6. Write the output file (if at least one variable was resolved). Include a header comment with generation metadata.
+   - Values are written as `KEY=VALUE`.
+   - Values are quoted and escaped when needed (e.g., spaces, `#`, quotes, newlines).
+   - Parent directories for the destination path are created automatically.
+7. Print a summary: N variables written, warnings.
 
 **Output file format:**
 
@@ -314,16 +329,18 @@ envgen check --schema config/frontend.env-schema.yaml
 
 - YAML syntax is valid
 - `schema_version` is a recognized version
-- Required top-level keys exist (`metadata`, `environments`, `sources`, `variables`)
+- Required top-level keys exist (`schema_version`, `metadata`, `environments`, `variables`) (`sources` is optional)
 - `metadata.destination` has at least one environment entry
+- `metadata.destination` environments exist in `environments`
 - Every environment referenced in a variable's `environments` list exists in the top-level `environments` map
-- Every variable's `source` references a defined source (or `static` / `manual`)
+- Every variable's `source` (or each resolver `source`) references a defined source (or `static` / `manual`)
 - Variables with `source: static` have a `values` map covering all their applicable environments
 - Variables with `resolvers` (schema v2) cover all applicable environments exactly once (no overlaps)
 - `static` resolvers include `values` for each resolver environment
 - Source command templates only reference placeholders that can be resolved (from environment config + built-in keys)
-- No duplicate variable names
 - Every variable has a `description`
+- Built-in source names `static` and `manual` are not redefined
+- For schema v2 variables: cannot set both `source` and `resolvers`, and cannot set variable-level `values` when using `resolvers`
 
 **Output on success:**
 ```
@@ -350,7 +367,7 @@ envgen list --schema config/backend.env-schema.yaml
 
 | Flag | Description |
 |------|-------------|
-| `--env <name>` | Filter to variables applicable to a specific environment |
+| `--env <name>` (`-e`) | Filter to variables applicable to a specific environment |
 | `--format <fmt>` | Output format: `table` (default), `json` |
 
 **Default table output:**
@@ -358,7 +375,7 @@ envgen list --schema config/backend.env-schema.yaml
 ```
 Schema: config/backend.env-schema.yaml (Backend Cloud Functions secrets)
 
-Name                    Environment              Source
+Name                    Environments             Source
 ────────────────────────────────────────────────────────────────
 GOOGLE_CLIENT_ID        local, staging, prod     firebase-sm
 GOOGLE_CLIENT_SECRET    local, staging, prod     firebase-sm
@@ -374,6 +391,39 @@ OPENAI_API_KEY          local, staging, prod     firebase-sm
 ```
 
 **With `--env staging`:** Only rows where `staging` is in the variable's environments.
+
+**Note (schema v2):** If a variable uses different sources per environment (via `resolvers`), the `Source` column summarizes sources as `source(env1, env2); source2(env3)`.
+
+**JSON format:** `list --format json` outputs an array of objects containing `name`, `description`, `source` (summary), `sensitive`, `required`, `environments`, and optional `notes`.
+
+#### `envgen init`
+
+Create a sample schema file (`env.dev.yaml`) to use as a starting point.
+
+```
+envgen init
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--output <path>` | `-o` | Output file or directory. If the path exists and is a directory, writes `env.dev.yaml` inside it. |
+| `--force` | `-f` | Overwrite the destination file if it already exists. |
+| `--quiet` | `-q` | Suppress success output. |
+
+#### `envgen schema`
+
+Export the embedded JSON Schema used to validate envgen YAML schemas.
+
+```
+envgen schema
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--output <path>` | `-o` | Output file or directory. If the path exists and is a directory, writes `envgen.schema.v<version>.json` inside it. |
+| `--stdout` | | Print to stdout instead of writing a file. |
+| `--force` | `-f` | Overwrite the destination file if it already exists. |
+| `--quiet` | `-q` | Suppress success output. |
 
 ---
 
@@ -533,7 +583,7 @@ Exit code: 1
 | Source command fails | Warn, skip variable, continue. Summarize at end. Exit 1 if any required variable failed. |
 | Source command times out | Default 30s timeout per command. `--timeout <seconds>` to override. Treated as failure. |
 | Unresolved template placeholder | Error at validation time, before executing any commands. Exit 1. |
-| Manual source in `--non-interactive` | Warn, skip. Variable omitted from output. |
+| Manual source in `--non-interactive` | Warn, skip. Variable omitted from output (does not affect exit code). |
 | Environment not defined in schema | Error: "Environment 'foo' not found. Available: local, staging, production." Exit 1. |
 | Variable has no value for target env | If `source: static` and no entry in `values` for the env → schema validation error. |
 
@@ -555,7 +605,9 @@ envgen/
 │   │   ├── mod.rs
 │   │   ├── pull.rs          # Pull command implementation
 │   │   ├── check.rs         # Check command implementation
-│   │   └── list.rs          # List command implementation
+│   │   ├── list.rs          # List command implementation
+│   │   ├── init.rs          # Init command implementation (sample schema)
+│   │   └── schema.rs        # Schema export command implementation (JSON Schema)
 │   ├── resolver/
 │   │   ├── mod.rs
 │   │   ├── static_source.rs # Static value resolution
@@ -563,11 +615,16 @@ envgen/
 │   │   └── command_source.rs# CLI command execution & template expansion
 │   ├── template.rs          # {placeholder} expansion engine
 │   └── output.rs            # .env file writer, table formatter
+├── schemas/
+│   ├── envgen.sample.yaml
+│   └── envgen.schema.v0.1.0.json
 ├── tests/
 │   ├── fixtures/            # Sample schema files for testing
 │   ├── test_pull.rs
 │   ├── test_check.rs
 │   ├── test_list.rs
+│   ├── test_init.rs
+│   ├── test_schema.rs
 │   └── test_template.rs
 ```
 
@@ -739,6 +796,12 @@ variables:
 ## 13. Usage Examples
 
 ```bash
+# Create a starter schema file
+envgen init
+
+# Export the JSON Schema for editor tooling
+envgen schema --stdout > envgen.schema.json
+
 # Validate the schema
 envgen check -s config/frontend.env-schema.yaml
 

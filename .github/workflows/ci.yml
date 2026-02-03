@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
 
 jobs:
   check:
@@ -41,3 +44,44 @@ jobs:
           UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
           UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make check
+
+  rust-macos:
+    name: Rust (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Rust checks
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test --locked
+
+  msrv:
+    name: MSRV (Rust 1.75)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (MSRV)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.75.0
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build + integration tests
+        run: |
+          cargo build --locked
+          cargo test --locked --tests

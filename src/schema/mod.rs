@@ -16,7 +16,9 @@ pub const JSON_SCHEMA: &str = include_str!(concat!(
 mod tests {
     use super::JSON_SCHEMA;
     use serde_json::Value;
+    #[cfg(target_os = "linux")]
     use std::io::Write;
+    #[cfg(target_os = "linux")]
     use std::process::Command;
 
     const EXPECTED_SCHEMA_DRAFT: &str = "https://json-schema.org/draft/2020-12/schema";
@@ -42,6 +44,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn embedded_schema_is_valid_draft_2020_12() {
         let uvx = "uvx";
 

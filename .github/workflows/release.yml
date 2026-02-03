@@ -15,11 +15,12 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    name: Create GitHub Release
+  meta:
+    name: Resolve tag + validate
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Resolve tag
         id: tag
@@ -74,6 +75,140 @@ jobs:
         env:
           TAG: ${{ steps.tag.outputs.tag }}
 
+      - name: Extract version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python - <<'PY'
+          import sys
+          try:
+            import tomllib  # py3.11+
+          except ModuleNotFoundError:
+            print("ERROR: Python tomllib not available", file=sys.stderr)
+            sys.exit(1)
+          with open("Cargo.toml", "rb") as f:
+            cargo = tomllib.load(f)
+          version = cargo.get("package", {}).get("version")
+          if not version:
+            print("ERROR: Could not find [package].version in Cargo.toml", file=sys.stderr)
+            sys.exit(1)
+          print(version)
+          PY
+          )"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Verify (${{ matrix.os }})
+    needs: meta
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Setup Go
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22.x"
+
+      - name: Setup Node
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+
+      - name: Setup uv
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: astral-sh/setup-uv@v3
+
+      - name: Install yamlfmt
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          go install github.com/google/yamlfmt/cmd/yamlfmt@v0.15.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run checks (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
+        run: make check
+
+      - name: Rust checks (macOS)
+        if: ${{ matrix.os == 'macos-latest' }}
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test --locked
+
+  publish-crates:
+    name: Publish to crates.io
+    needs: [meta, verify]
+    runs-on: ubuntu-latest
+    environment: crates-io
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.meta.outputs.tag }}
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Publish
+        shell: bash
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
+            echo "ERROR: missing CARGO_REGISTRY_TOKEN secret"
+            exit 1
+          fi
+
+          cargo publish --locked 2>publish.err || {
+            if grep -q "already uploaded" publish.err; then
+              echo "crate already published; skipping"
+              exit 0
+            fi
+            cat publish.err >&2
+            exit 1
+          }
+
+  github-release:
+    name: Create GitHub Release
+    needs: [meta, verify]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.meta.outputs.tag }}
+
       - name: Generate release notes (git-cliff)
         id: git-cliff
         uses: orhun/git-cliff-action@v4
@@ -88,13 +223,13 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.tag.outputs.tag }}
-          name: ${{ steps.tag.outputs.tag }}
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ needs.meta.outputs.tag }}
           body: ${{ steps.git-cliff.outputs.content }}
 
   build:
     name: Build & Upload Binaries
-    needs: release
+    needs: [meta, github-release]
     strategy:
       fail-fast: false
       matrix:
@@ -107,7 +242,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ needs.release.outputs.tag }}
+          ref: ${{ needs.meta.outputs.tag }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
@@ -125,7 +260,7 @@ jobs:
         shell: bash
         run: |
           BIN="envgen"
-          ASSET="envgen-${{ needs.release.outputs.tag }}-${{ runner.os }}-${{ runner.arch }}.tar.gz"
+          ASSET="envgen-${{ needs.meta.outputs.tag }}-${{ runner.os }}-${{ runner.arch }}.tar.gz"
           tar -czf "$ASSET" -C target/release "$BIN"
           echo "ASSET=$ASSET" >> "$GITHUB_ENV"
           echo "ASSET_PATH=$ASSET" >> "$GITHUB_ENV"
@@ -135,7 +270,7 @@ jobs:
         shell: pwsh
         run: |
           $bin = "envgen.exe"
-          $asset = "envgen-${{ needs.release.outputs.tag }}-${{ runner.os }}-${{ runner.arch }}.zip"
+          $asset = "envgen-${{ needs.meta.outputs.tag }}-${{ runner.os }}-${{ runner.arch }}.zip"
           Compress-Archive -Path "target/release/$bin" -DestinationPath $asset -Force
           "ASSET=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "ASSET_PATH=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
@@ -144,8 +279,38 @@ jobs:
         uses: svenstaro/upload-release-action@v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
-          tag: ${{ needs.release.outputs.tag }}
+          tag: ${{ needs.meta.outputs.tag }}
           file: ${{ env.ASSET_PATH }}
           asset_name: ${{ env.ASSET }}
           overwrite: true
 
+  homebrew-core:
+    name: Open homebrew-core bump PR
+    needs: [meta, verify, publish-crates]
+    runs-on: macos-latest
+    if: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN != '' }}
+    steps:
+      - name: Brew update
+        run: brew update
+
+      - name: Check formula exists
+        id: formula
+        shell: bash
+        run: |
+          if brew info envgen >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump formula PR
+        if: ${{ steps.formula.outputs.exists == 'true' }}
+        env:
+          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
+        run: |
+          brew bump-formula-pr \
+            --tag "${{ needs.meta.outputs.tag }}" \
+            --version "${{ needs.meta.outputs.version }}" \
+            --no-browse \
+            --no-audit \
+            envgen

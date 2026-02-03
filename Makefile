@@ -14,7 +14,8 @@ YAMLFMT ?= yamlfmt
 YAMLFMT_VERSION ?= v0.15.0
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
-SCHEMA_FILE := schemas/envgen.schema.v0.1.0.json
+CARGO_VERSION := $(shell awk -F ' = ' '/^\\[package\\]/{in=1;next} /^\\[/{in=0} in && $$1=="version"{gsub(/"/,"",$$2); print $$2; exit}' Cargo.toml)
+SCHEMA_FILE := schemas/envgen.schema.v$(CARGO_VERSION).json
 
 # ─── Build & Test ────────────────────────────────────────────────
 
