@@ -1,0 +1,24 @@
+[package]
+name = "envtool"
+version = "0.1.0"
+edition = "2021"
+description = "Environment file generator CLI — generate .env files from declarative YAML schemas"
+license = "MIT"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+chrono = "0.4"
+comfy-table = "7"
+dialoguer = "0.11"
+colored = "2"
+anyhow = "1"
+regex = "1"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"

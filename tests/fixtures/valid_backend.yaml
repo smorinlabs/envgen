@@ -1,0 +1,51 @@
+schema_version: "1"
+
+metadata:
+  description: "Backend Cloud Functions secrets and configuration"
+  destination:
+    local: "functions/.env.local"
+    staging: "functions/.env.local"
+    production: "functions/.env.local"
+
+environments:
+  local:
+    firebase_project: "my-app-staging"
+  staging:
+    firebase_project: "my-app-staging"
+  production:
+    firebase_project: "my-app"
+
+sources:
+  echo-source:
+    command: "echo secret-value-for-{key}"
+
+variables:
+  GOOGLE_CLIENT_ID:
+    description: "Google OAuth 2.0 Client ID"
+    sensitive: false
+    source: echo-source
+
+  GOOGLE_CLIENT_SECRET:
+    description: "Google OAuth 2.0 Client Secret"
+    sensitive: true
+    source: echo-source
+
+  STRIPE_SECRET_KEY:
+    description: "Stripe secret API key"
+    sensitive: true
+    source: echo-source
+    source_instructions: |
+      Stripe Dashboard > Developers > API Keys > Secret key
+
+  TOKEN_ENCRYPTION_KEY:
+    description: "AES encryption key for stored OAuth refresh tokens"
+    sensitive: true
+    source: echo-source
+    notes: "Changing this key invalidates ALL stored user tokens."
+
+  OPTIONAL_KEY:
+    description: "An optional analytics key"
+    sensitive: true
+    source: echo-source
+    required: false
+    environments: [staging, production]

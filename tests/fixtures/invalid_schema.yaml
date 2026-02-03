@@ -1,0 +1,35 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema with various errors"
+  destination:
+    local: ".env"
+
+environments:
+  local:
+    project: "test"
+
+sources: {}
+
+variables:
+  GOOD_VAR:
+    description: "This one is fine"
+    source: static
+    values:
+      local: "ok"
+
+  BAD_SOURCE:
+    description: "References undefined source"
+    source: nonexistent-source
+
+  STATIC_NO_VALUES:
+    description: "Static source with no values"
+    source: static
+
+  BAD_ENV_REF:
+    description: "References undefined environment"
+    source: static
+    environments: [local, production]
+    values:
+      local: "ok"
+      production: "ok"
