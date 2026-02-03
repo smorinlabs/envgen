@@ -88,21 +88,35 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
             }
             var_count += 1;
 
-            let source = &var.source;
+            let source = match var.effective_source_for_env(&opts.env_name) {
+                Some(s) => s,
+                None => {
+                    println!("  {}", var_name);
+                    println!("    source:  <missing>");
+                    println!();
+                    continue;
+                }
+            };
             if source == "static" {
                 static_manual_count += 1;
-                let value = var
-                    .values
-                    .as_ref()
-                    .and_then(|v| v.get(&opts.env_name))
-                    .map(|v| {
-                        if var.sensitive && !opts.unmask {
-                            output::mask_value(v, false)
-                        } else {
-                            v.clone()
+                let value = match var.values_for_env(&opts.env_name) {
+                    Some(values) => match static_source::resolve_static(
+                        var_name,
+                        values,
+                        &opts.env_name,
+                        env_config,
+                    ) {
+                        Ok(v) => {
+                            if var.sensitive && !opts.unmask {
+                                output::mask_value(&v, false)
+                            } else {
+                                v
+                            }
                         }
-                    })
-                    .unwrap_or_else(|| "<missing>".to_string());
+                        Err(e) => format!("<error: {}>", e),
+                    },
+                    None => "<missing>".to_string(),
+                };
                 println!("  {}", var_name);
                 println!("    source:  static");
                 println!("    value:   {}", value);
@@ -118,7 +132,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
             } else {
                 command_count += 1;
                 if let Some(src) = schema.sources.get(source) {
-                    let key = var.effective_key(var_name);
+                    let key = var.effective_key_for_env(var_name, &opts.env_name);
                     let cmd = command_source::build_command(
                         &src.command,
                         var_name,
@@ -179,26 +193,34 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     let mut manual_vars: Vec<(String, String, Option<String>, bool)> = Vec::new(); // (var_name, description, instructions, required)
 
     for (var_name, var) in &applicable_vars {
-        let source = &var.source;
+        let source = match var.effective_source_for_env(&opts.env_name) {
+            Some(s) => s,
+            None => {
+                static_results.push(ResolveResult::Failed(
+                    var_name.to_string(),
+                    "No source configured for this variable/environment".to_string(),
+                ));
+                continue;
+            }
+        };
         if source == "static" {
-            match &var.values {
-                Some(values) => {
-                    match static_source::resolve_static(var_name, values, &opts.env_name, env_config)
-                    {
-                        Ok(value) => {
-                            static_results.push(ResolveResult::Success(
-                                var_name.to_string(),
-                                value,
-                            ));
-                        }
-                        Err(e) => {
-                            static_results.push(ResolveResult::Failed(
-                                var_name.to_string(),
-                                e.to_string(),
-                            ));
-                        }
+            match var.values_for_env(&opts.env_name) {
+                Some(values) => match static_source::resolve_static(
+                    var_name,
+                    values,
+                    &opts.env_name,
+                    env_config,
+                ) {
+                    Ok(value) => {
+                        static_results.push(ResolveResult::Success(var_name.to_string(), value));
                     }
-                }
+                    Err(e) => {
+                        static_results.push(ResolveResult::Failed(
+                            var_name.to_string(),
+                            e.to_string(),
+                        ));
+                    }
+                },
                 None => {
                     static_results.push(ResolveResult::Failed(
                         var_name.to_string(),
@@ -213,8 +235,8 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                 var.source_instructions.clone(),
                 var.required,
             ));
-        } else if let Some(src) = schema.sources.get(source.as_str()) {
-            let key = var.effective_key(var_name);
+        } else if let Some(src) = schema.sources.get(source) {
+            let key = var.effective_key_for_env(var_name, &opts.env_name);
             match command_source::build_command(
                 &src.command,
                 var_name,
@@ -225,7 +247,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                 Ok(cmd) => {
                     command_tasks.push((
                         var_name.to_string(),
-                        source.clone(),
+                        source.to_string(),
                         cmd,
                         var.required,
                     ));
@@ -320,7 +342,9 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
 
     for var_name in &var_order {
         let var = schema.variables.get(var_name).unwrap();
-        let source_display = &var.source;
+        let source_display = var
+            .effective_source_for_env(&opts.env_name)
+            .unwrap_or("<missing>");
 
         if let Some(result) = result_map.remove(var_name) {
             match result {

@@ -7,7 +7,7 @@ fn envtool() -> Command {
 
 #[test]
 fn test_template_expansion_in_dry_run() {
-    // The dry-run output should show resolved commands with placeholders expanded
+    // The dry-run output should show the effective resolver per environment.
     envtool()
         .arg("pull")
         .arg("-s")
@@ -17,8 +17,10 @@ fn test_template_expansion_in_dry_run() {
         .arg("--dry-run")
         .assert()
         .success()
-        // The echo-source command should have {key} expanded to API_KEY
-        .stdout(predicate::str::contains("echo API_KEY-local"));
+        // For local, VITE_API_KEY is static (schema v2 resolvers)
+        .stdout(predicate::str::contains("VITE_API_KEY\n    source:  static"))
+        // Sensitive values are masked by default
+        .stdout(predicate::str::contains("value:   API_..."));
 }
 
 #[test]

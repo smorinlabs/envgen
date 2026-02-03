@@ -5,6 +5,33 @@ use std::path::Path;
 
 use crate::schema::types::Schema;
 
+fn format_source_summary(schema: &Schema, var: &crate::schema::types::Variable) -> String {
+    let var_envs: Vec<String> = match &var.environments {
+        Some(envs) => envs.clone(),
+        None => schema.environment_names(),
+    };
+
+    let mut by_source: std::collections::BTreeMap<String, Vec<String>> =
+        std::collections::BTreeMap::new();
+    for env in var_envs {
+        let source = var.effective_source_for_env(&env).unwrap_or("<missing>");
+        by_source
+            .entry(source.to_string())
+            .or_default()
+            .push(env.to_string());
+    }
+
+    if by_source.len() == 1 {
+        return by_source.keys().next().unwrap().to_string();
+    }
+
+    by_source
+        .into_iter()
+        .map(|(source, envs)| format!("{}({})", source, envs.join(", ")))
+        .collect::<Vec<String>>()
+        .join("; ")
+}
+
 /// Write the .env file with a header comment and key=value pairs.
 pub fn write_env_file(
     path: &Path,
@@ -87,7 +114,8 @@ pub fn format_variable_table(
         }
 
         let envs_display = var_envs.join(", ");
-        table.add_row(vec![var_name.as_str(), &envs_display, &var.source]);
+        let source_summary = format_source_summary(schema, var);
+        table.add_row(vec![var_name.as_str(), &envs_display, &source_summary]);
         count += 1;
     }
 
@@ -131,7 +159,7 @@ pub fn format_variable_json(
         );
         obj.insert(
             "source".to_string(),
-            serde_json::Value::String(var.source.clone()),
+            serde_json::Value::String(format_source_summary(schema, var)),
         );
         obj.insert(
             "sensitive".to_string(),

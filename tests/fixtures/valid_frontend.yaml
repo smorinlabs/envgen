@@ -1,4 +1,4 @@
-schema_version: "1"
+schema_version: "2"
 
 metadata:
   description: "Frontend environment variables (Vite)"
@@ -53,9 +53,15 @@ variables:
   VITE_API_KEY:
     description: "API key fetched from a source"
     sensitive: true
-    source: echo-source
     source_key: API_KEY
     environments: [local, staging, production]
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "API_KEY-local"
+      - environments: [staging, production]
+        source: echo-source
 
   VITE_OPTIONAL_FLAG:
     description: "Optional feature flag"

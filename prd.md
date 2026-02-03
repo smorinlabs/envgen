@@ -41,7 +41,7 @@ There is no single, machine-readable definition of "what env vars does this proj
 - **Multi-file output** — Each invocation writes one file; orchestration across files is the caller's job (e.g., a Makefile or shell script)
 - **GUI or interactive wizard** — CLI only
 - **Caching** — Resolved values are not cached locally; each pull fetches fresh values
-- **Value validation** — No regex or enum validation on resolved values (deferred to v2)
+- **Value validation** — No regex or enum validation on resolved values (deferred to a future version)
 - **Schema inheritance** — Schemas are not composable; each schema is standalone
 - **Secrets masking in output file** — The tool writes real values to the output file; masking is only applied to stdout
 - **Secret rotation automation** — The schema documents *where* to rotate secrets, but the tool does not perform rotation itself
@@ -57,7 +57,7 @@ There is no single, machine-readable definition of "what env vars does this proj
 ```yaml
 # config/frontend.env-schema.yaml
 
-schema_version: "1"
+schema_version: "2"
 
 # ─── Metadata ───────────────────────────────────────────────────
 metadata:
@@ -123,9 +123,15 @@ variables:
   VITE_GOOGLE_CLIENT_ID:
     description: "Google OAuth Client ID for Sign-In and Picker"
     sensitive: false
-    source: firebase-sm
     source_key: GOOGLE_CLIENT_ID    # key passed into the source command template
     environments: [local, staging, production]
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "local-google-client-id"
+      - environments: [staging, production]
+        source: gcloud
 
   VITE_STRIPE_PUBLIC_KEY:
     description: "Stripe publishable key (client-side, not secret)"
@@ -141,6 +147,10 @@ variables:
 
 #### `schema_version` (required)
 String. Version of the schema format. Allows the CLI to handle migrations.
+
+Recognized versions:
+- `"1"` — v1 format (single `source` per variable)
+- `"2"` — adds per-environment variable resolvers via `variables.*.resolvers`
 
 #### `metadata` (required)
 
@@ -182,13 +192,39 @@ Map of variable name → variable definition.
 |-------|------|----------|---------|-------------|
 | `description` | string | **yes** | — | What this variable is and why it exists. This is the documentation. |
 | `sensitive` | bool | no | `true` | Whether the value is secret. Affects display in dry-run and list. |
-| `source` | string | **yes** | — | Key into `sources`, or `static` / `manual`. |
+| `source` | string | conditional | — | **Required when `resolvers` is not set.** Key into `sources`, or `static` / `manual`. |
 | `source_key` | string | no | variable name | Override the `{key}` placeholder in the source command. Use when the source system names the secret differently. |
 | `source_instructions` | string | no | — | Human-readable instructions for finding/creating this value. Shown during `manual` prompts and in documentation output. Template placeholders from the environment are expanded. |
 | `environments` | list\<string\> | no | all environments | Which environments this variable applies to. Omit to include in all. |
-| `values` | map\<env, string\> | conditional | — | **Required when `source: static`**. Inline values per environment. Values may contain `{placeholder}` references to environment config. |
+| `values` | map\<env, string\> | conditional | — | **Required when `source: static`** (and `resolvers` is not set). Inline values per environment. Values may contain `{placeholder}` references to environment config. |
+| `resolvers` | list\<resolver\> | conditional | — | **Schema v2 only.** Per-environment source bindings (use when a variable's source differs by environment). |
 | `required` | bool | no | `true` | Whether this variable must have a value. If `false`, a missing value is a warning, not an error. |
 | `notes` | string | no | — | Additional context: rotation policy, gotchas, related variables. Shown in list and docs output. |
+
+##### `resolver` (schema_version: "2")
+
+Each resolver binds a `source` to a specific set of environments for the variable.
+
+Rules:
+- A variable must use **either** `source` (v1-style) **or** `resolvers` (v2-style).
+- Resolver `environments` must not overlap.
+- Resolver environments must fully cover the variable's applicable environments.
+- If a resolver uses `source: static`, it must provide `values` for its environments.
+
+```yaml
+variables:
+  VITE_API_KEY:
+    description: "Example: local is static, staging/prod come from Secret Manager"
+    sensitive: true
+    source_key: API_KEY
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "API_KEY-local"
+      - environments: [staging, production]
+        source: gcloud
+```
 
 ---
 
@@ -236,7 +272,10 @@ envtool pull --schema config/frontend.env-schema.yaml --env staging
 2. Determine the destination file path from `metadata.destination[env]`.
 3. If destination file exists and `--force` is not set → error with message.
 4. For each variable applicable to the target environment:
-   - `static`: Read from `values[env]`, expand any `{placeholder}` references.
+   - Determine its effective source for that environment:
+     - If `resolvers` is set (schema v2), pick the resolver whose `environments` contains the target env.
+     - Otherwise, use `source` (schema v1-style).
+   - `static`: Read from the appropriate `values[env]`, expand any `{placeholder}` references.
    - `manual`: Prompt for input (or skip if `--non-interactive`). Show `description` and `source_instructions`.
    - Any other source: Build the command from the source template, substituting `{key}`, `{environment}`, and environment config values. Execute it and capture stdout (trimmed).
 5. If a source command fails (non-zero exit):
@@ -280,6 +319,8 @@ envtool check --schema config/frontend.env-schema.yaml
 - Every environment referenced in a variable's `environments` list exists in the top-level `environments` map
 - Every variable's `source` references a defined source (or `static` / `manual`)
 - Variables with `source: static` have a `values` map covering all their applicable environments
+- Variables with `resolvers` (schema v2) cover all applicable environments exactly once (no overlaps)
+- `static` resolvers include `values` for each resolver environment
 - Source command templates only reference placeholders that can be resolved (from environment config + built-in keys)
 - No duplicate variable names
 - Every variable has a `description`
@@ -546,7 +587,7 @@ envtool/
 ## 12. Example: Full Backend Schema
 
 ```yaml
-schema_version: "1"
+schema_version: "2"
 
 metadata:
   description: >
@@ -573,6 +614,8 @@ environments:
 sources:
   firebase-sm:
     command: "firebase functions:secrets:access {key} --project {firebase_project}"
+  1password:
+    command: "op read \"op://Engineering/BankSheets {environment}/{key}\""
 
 variables:
   GOOGLE_CLIENT_ID:
@@ -666,7 +709,11 @@ variables:
       OpenAI API key for AI-powered transaction categorization.
       Used by the categorization Cloud Function.
     sensitive: true
-    source: firebase-sm
+    resolvers:
+      - environments: [local]
+        source: 1password
+      - environments: [staging, production]
+        source: firebase-sm
     source_instructions: |
       OpenAI Platform > API Keys
       https://platform.openai.com/api-keys
@@ -727,12 +774,12 @@ envtool pull -s config/backend.env-schema.yaml -o /tmp/test.env --force
 |----------|----------|
 | **Parallel command execution** | Parallel by default. Source commands run concurrently via tokio for faster resolution. |
 | **Caching** | Not needed for v1. Each pull fetches fresh values. |
-| **Value validation** | Not needed for v1. No regex/enum validation on resolved values. Deferred to v2. |
+| **Value validation** | Not needed for v1. No regex/enum validation on resolved values. Deferred to a future version. |
 | **Secrets masking in output file** | Real values are written to the output file. Masking is applied only to stdout during dry-run (unless `--unmask` is set). |
 | **Schema inheritance** | One schema version field for format versioning, but no frontend/backend inheritance or composition. Each schema is standalone. |
 | **Wrapper scripts** | A Makefile is included with common invocations (e.g., `make env-local` runs pull for both frontend and backend schemas). |
 
-### Open for v2
+### Open for future versions
 
 1. **Value validation** — Should variables support a `validate` field (regex or enum) to check resolved values? E.g., `validate: "^pk_(test|live)_"` for Stripe keys.
 2. **Schema composition** — Should schemas support an `extends` field to inherit from a base schema, reducing duplication across frontend/backend?

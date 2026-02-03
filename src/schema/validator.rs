@@ -1,14 +1,20 @@
 use super::types::Schema;
 use crate::template;
+use std::collections::HashMap;
 
 /// Validate a schema and return a list of errors. Empty list means valid.
 pub fn validate_schema(schema: &Schema) -> Vec<String> {
     let mut errors = Vec::new();
 
     // Check schema_version
-    if schema.schema_version != "1" {
+    let schema_v2 = match schema.schema_version.as_str() {
+        "1" => false,
+        "2" => true,
+        _ => true, // keep validating but treat as unsupported
+    };
+    if schema.schema_version != "1" && schema.schema_version != "2" {
         errors.push(format!(
-            "Unrecognized schema_version: \"{}\". Expected \"1\".",
+            "Unrecognized schema_version: \"{}\". Expected \"1\" or \"2\".",
             schema.schema_version
         ));
     }
@@ -37,15 +43,6 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
             errors.push(format!("{}: description must not be empty.", var_name));
         }
 
-        // Check source is valid
-        let source = &var.source;
-        if source != "static" && source != "manual" && !schema.sources.contains_key(source) {
-            errors.push(format!(
-                "{}: source \"{}\" is not defined in sources.",
-                var_name, source
-            ));
-        }
-
         // Check environments references
         if let Some(var_envs) = &var.environments {
             for env in var_envs {
@@ -58,55 +55,194 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
             }
         }
 
-        // Check static source has values for all applicable environments
-        if source == "static" {
-            match &var.values {
-                None => {
+        let applicable_envs: Vec<&String> = match &var.environments {
+            Some(envs) => envs.iter().collect(),
+            None => env_names.iter().copied().collect(),
+        };
+
+        let has_resolvers = var.resolvers.as_ref().is_some_and(|r| !r.is_empty());
+
+        // schema v1 does not support resolvers
+        if !schema_v2 && has_resolvers {
+            errors.push(format!(
+                "{}: resolvers is only supported in schema_version \"2\".",
+                var_name
+            ));
+            continue;
+        }
+
+        if has_resolvers {
+            if var.source.is_some() {
+                errors.push(format!(
+                    "{}: cannot set both \"source\" and \"resolvers\". Choose one.",
+                    var_name
+                ));
+            }
+            if var.values.is_some() {
+                errors.push(format!(
+                    "{}: cannot set variable-level \"values\" when using \"resolvers\".",
+                    var_name
+                ));
+            }
+
+            let mut env_to_resolver: HashMap<String, usize> = HashMap::new();
+            let resolvers = var.resolvers.as_ref().unwrap();
+
+            for (idx, resolver) in resolvers.iter().enumerate() {
+                // Check resolver environments references + overlaps
+                if resolver.environments.is_empty() {
                     errors.push(format!(
-                        "{}: source is \"static\" but no values map provided.",
-                        var_name
+                        "{}: resolver #{} must specify at least one environment.",
+                        var_name,
+                        idx + 1
                     ));
                 }
-                Some(values) => {
-                    let applicable_envs: Vec<&String> = match &var.environments {
-                        Some(envs) => envs.iter().collect(),
-                        None => env_names.iter().copied().collect(),
-                    };
-                    for env in applicable_envs {
-                        if !values.contains_key(env) {
-                            errors.push(format!(
-                                "{}: source is \"static\" but no value provided for environment \"{}\".",
-                                var_name, env
-                            ));
+
+                for env in &resolver.environments {
+                    if !schema.environments.contains_key(env) {
+                        errors.push(format!(
+                            "{}: resolver references environment \"{}\" which is not defined in environments.",
+                            var_name, env
+                        ));
+                    }
+                    if !applicable_envs.iter().any(|e| *e == env) {
+                        errors.push(format!(
+                            "{}: resolver references environment \"{}\" which is not applicable to this variable.",
+                            var_name, env
+                        ));
+                    }
+                    if env_to_resolver.contains_key(env) {
+                        errors.push(format!(
+                            "{}: resolver environments overlap for environment \"{}\".",
+                            var_name, env
+                        ));
+                    } else {
+                        env_to_resolver.insert(env.clone(), idx);
+                    }
+                }
+
+                // Check resolver source is valid
+                let source = resolver.source.as_str();
+                if source != "static" && source != "manual" && !schema.sources.contains_key(source)
+                {
+                    errors.push(format!(
+                        "{}: resolver source \"{}\" is not defined in sources.",
+                        var_name, source
+                    ));
+                }
+
+                // Check static resolvers have values for each resolver environment
+                if source == "static" {
+                    match &resolver.values {
+                        None => errors.push(format!(
+                            "{}: resolver source is \"static\" but no values map provided.",
+                            var_name
+                        )),
+                        Some(values) => {
+                            for env in &resolver.environments {
+                                if !values.contains_key(env) {
+                                    errors.push(format!(
+                                        "{}: resolver source is \"static\" but no value provided for environment \"{}\".",
+                                        var_name, env
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Check source command template placeholders can be resolved (resolver-level)
+                if source != "static" && source != "manual" {
+                    if let Some(src) = schema.sources.get(source) {
+                        for env_name in &resolver.environments {
+                            if let Some(env_config) = schema.environments.get(env_name) {
+                                let mut available_keys: Vec<String> =
+                                    env_config.keys().cloned().collect();
+                                available_keys.push("key".to_string());
+                                available_keys.push("environment".to_string());
+
+                                let placeholders = template::extract_placeholders(&src.command);
+                                for ph in placeholders {
+                                    if !available_keys.contains(&ph) {
+                                        errors.push(format!(
+                                            "{}: source command template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
+                                            var_name, ph, env_name
+                                        ));
+                                    }
+                                }
+                            }
                         }
                     }
                 }
             }
-        }
 
-        // Check source command template placeholders can be resolved
-        if source != "static" && source != "manual" {
-            if let Some(src) = schema.sources.get(source) {
-                // Check for each applicable environment
-                let applicable_envs: Vec<&String> = match &var.environments {
-                    Some(envs) => envs.iter().collect(),
-                    None => env_names.iter().copied().collect(),
-                };
+            // Ensure all applicable environments are covered by exactly one resolver
+            for env in applicable_envs {
+                if !env_to_resolver.contains_key(env) {
+                    errors.push(format!(
+                        "{}: no resolver provided for environment \"{}\".",
+                        var_name, env
+                    ));
+                }
+            }
+        } else {
+            // v1-style variables: require a single source
+            let source = match var.source.as_deref() {
+                Some(s) => s,
+                None => {
+                    errors.push(format!("{}: missing required field \"source\".", var_name));
+                    continue;
+                }
+            };
 
-                for env_name in applicable_envs {
-                    if let Some(env_config) = schema.environments.get(env_name) {
-                        let mut available_keys: Vec<String> =
-                            env_config.keys().cloned().collect();
-                        available_keys.push("key".to_string());
-                        available_keys.push("environment".to_string());
+            // Check source is valid
+            if source != "static" && source != "manual" && !schema.sources.contains_key(source) {
+                errors.push(format!(
+                    "{}: source \"{}\" is not defined in sources.",
+                    var_name, source
+                ));
+            }
 
-                        let placeholders = template::extract_placeholders(&src.command);
-                        for ph in placeholders {
-                            if !available_keys.contains(&ph) {
+            // Check static source has values for all applicable environments
+            if source == "static" {
+                match &var.values {
+                    None => {
+                        errors.push(format!(
+                            "{}: source is \"static\" but no values map provided.",
+                            var_name
+                        ));
+                    }
+                    Some(values) => {
+                        for env in &applicable_envs {
+                            if !values.contains_key(*env) {
                                 errors.push(format!(
-                                    "{}: source command template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
-                                    var_name, ph, env_name
+                                    "{}: source is \"static\" but no value provided for environment \"{}\".",
+                                    var_name, env
                                 ));
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Check source command template placeholders can be resolved
+            if source != "static" && source != "manual" {
+                if let Some(src) = schema.sources.get(source) {
+                    for env_name in &applicable_envs {
+                        if let Some(env_config) = schema.environments.get(*env_name) {
+                            let mut available_keys: Vec<String> =
+                                env_config.keys().cloned().collect();
+                            available_keys.push("key".to_string());
+                            available_keys.push("environment".to_string());
+
+                            let placeholders = template::extract_placeholders(&src.command);
+                            for ph in placeholders {
+                                if !available_keys.contains(&ph) {
+                                    errors.push(format!(
+                                        "{}: source command template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
+                                        var_name, ph, env_name
+                                    ));
+                                }
                             }
                         }
                     }

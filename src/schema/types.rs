@@ -30,7 +30,11 @@ pub struct Variable {
     #[serde(default = "default_sensitive")]
     pub sensitive: bool,
 
-    pub source: String,
+    /// Key into `sources`, or `static` / `manual`.
+    ///
+    /// For schema v2, this may be omitted when `resolvers` is used.
+    #[serde(default)]
+    pub source: Option<String>,
 
     #[serde(default)]
     pub source_key: Option<String>,
@@ -46,11 +50,30 @@ pub struct Variable {
     #[serde(default)]
     pub values: Option<BTreeMap<String, String>>,
 
+    /// Schema v2: Per-environment resolver bindings for this variable.
+    ///
+    /// When present, the active resolver is selected by environment name.
+    #[serde(default)]
+    pub resolvers: Option<Vec<VariableResolver>>,
+
     #[serde(default = "default_required")]
     pub required: bool,
 
     #[serde(default)]
     pub notes: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct VariableResolver {
+    pub environments: Vec<String>,
+    pub source: String,
+
+    #[serde(default)]
+    pub source_key: Option<String>,
+
+    /// Inline values per environment (required when source = "static").
+    #[serde(default)]
+    pub values: Option<BTreeMap<String, String>>,
 }
 
 fn default_sensitive() -> bool {
@@ -70,11 +93,33 @@ impl Variable {
         }
     }
 
+    /// Returns the resolver that applies to the given environment (schema v2).
+    pub fn resolver_for_env(&self, env: &str) -> Option<&VariableResolver> {
+        self.resolvers
+            .as_ref()
+            .and_then(|rs| rs.iter().find(|r| r.environments.iter().any(|e| e == env)))
+    }
+
+    /// Returns the effective source name for the given environment.
+    pub fn effective_source_for_env(&self, env: &str) -> Option<&str> {
+        self.resolver_for_env(env)
+            .map(|r| r.source.as_str())
+            .or_else(|| self.source.as_deref())
+    }
+
     /// Returns the key to use in source command templates.
-    pub fn effective_key(&self, var_name: &str) -> String {
-        self.source_key
-            .clone()
+    pub fn effective_key_for_env(&self, var_name: &str, env: &str) -> String {
+        self.resolver_for_env(env)
+            .and_then(|r| r.source_key.clone())
+            .or_else(|| self.source_key.clone())
             .unwrap_or_else(|| var_name.to_string())
+    }
+
+    /// Returns the values map to use for the given environment (static source only).
+    pub fn values_for_env(&self, env: &str) -> Option<&BTreeMap<String, String>> {
+        self.resolver_for_env(env)
+            .and_then(|r| r.values.as_ref())
+            .or_else(|| self.values.as_ref())
     }
 }
 
