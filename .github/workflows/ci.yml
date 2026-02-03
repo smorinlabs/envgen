@@ -33,7 +33,7 @@ jobs:
 
       - name: Install yamlfmt
         run: |
-          go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+          go install github.com/google/yamlfmt/cmd/yamlfmt@v0.15.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Run checks

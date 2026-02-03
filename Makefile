@@ -7,8 +7,11 @@ UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 UV_TOOL_DIR ?= $(CURDIR)/.uv-tools
 BIOME ?= npx --yes @biomejs/biome@2.3.11
 CHECK_JSONSCHEMA ?= check-jsonschema
+CHECK_JSONSCHEMA_VERSION ?= 0.36.1
 YAMLLINT ?= yamllint
+YAMLLINT_VERSION ?= 1.38.0
 YAMLFMT ?= yamlfmt
+YAMLFMT_VERSION ?= v0.15.0
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
 SCHEMA_FILE := schemas/envgen.schema.v0.1.0.json
@@ -24,7 +27,7 @@ dev: ## Build the project in debug mode
 	cargo build
 
 .PHONY: test
-test: ## Run all tests
+test: check-schema ## Run all tests
 	cargo test
 
 .PHONY: check
@@ -48,11 +51,11 @@ install: ## Install envgen to ~/.cargo/bin
 .PHONY: install-yamllint
 install-yamllint: ## Fetch yamllint via uvx
 	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Install uv to use yamllint via uvx."; exit 1; }
-	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) $(YAMLLINT) --version >/dev/null
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) --from $(YAMLLINT)==$(YAMLLINT_VERSION) $(YAMLLINT) --version >/dev/null
 
 .PHONY: install-yamlfmt
 install-yamlfmt: ## Install yamlfmt (Go)
-	go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+	go install github.com/google/yamlfmt/cmd/yamlfmt@$(YAMLFMT_VERSION)
 
 .PHONY: install-yaml-tools
 install-yaml-tools: install-yamllint install-yamlfmt ## Install YAML lint/format tools
@@ -60,7 +63,7 @@ install-yaml-tools: install-yamllint install-yamlfmt ## Install YAML lint/format
 .PHONY: yaml-lint-fixtures
 yaml-lint-fixtures: ## Lint YAML schemas in tests/fixtures
 	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Install uv to use yamllint via uvx."; exit 1; }
-	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) $(YAMLLINT) -c .yamllint.yml $(YAML_FIXTURES)
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) --from $(YAMLLINT)==$(YAMLLINT_VERSION) $(YAMLLINT) -c .yamllint.yml $(YAML_FIXTURES)
 
 .PHONY: yaml-fmt-fixtures
 yaml-fmt-fixtures: ## Format YAML schemas in tests/fixtures
@@ -83,15 +86,16 @@ check-schema: check-schema-biome check-schema-meta ## Validate the JSON Schema f
 	@echo "✓ Schema passed all checks"
 
 check-schema-biome: ## Layer 1: JSON lint/format check (Biome)
-	@echo "Checking schema formatting and linting (Biome)..."
+	@echo "Checking schema formatting and linting (Biome)... (first run may download the tool)"
 	$(BIOME) check $(SCHEMA_FILE)
 
 check-schema-meta: ## Layer 2: Meta-schema validation (Draft 2020-12)
-	@echo "Validating schema against Draft 2020-12 meta-schema..."
+	@echo "Validating schema against Draft 2020-12 meta-schema... (first run may download the tool)"
 	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Install uv to run check-jsonschema via uvx."; exit 1; }
-	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) $(CHECK_JSONSCHEMA) --check-metaschema $(SCHEMA_FILE)
+	UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UVX) --from $(CHECK_JSONSCHEMA)==$(CHECK_JSONSCHEMA_VERSION) $(CHECK_JSONSCHEMA) --check-metaschema $(SCHEMA_FILE)
 
 fmt-schema: ## Auto-format the schema file (Biome)
+	@echo "Formatting schema (Biome)... (first run may download the tool)"
 	$(BIOME) format --write $(SCHEMA_FILE)
 
 # ─── Schema Validation ──────────────────────────────────────────
