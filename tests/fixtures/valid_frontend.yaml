@@ -1,0 +1,68 @@
+schema_version: "1"
+
+metadata:
+  description: "Frontend environment variables (Vite)"
+  destination:
+    local: ".env"
+    staging: ".env"
+    production: ".env.production"
+
+environments:
+  local:
+    firebase_project: "my-app-staging"
+    base_url: "http://localhost:5173"
+  staging:
+    firebase_project: "my-app-staging"
+    base_url: "https://staging.example.com"
+  production:
+    firebase_project: "my-app"
+    base_url: "https://app.example.com"
+
+sources:
+  echo-source:
+    command: "echo {key}-{environment}"
+
+variables:
+  VITE_ENV:
+    description: "Environment identifier"
+    sensitive: false
+    source: static
+    values:
+      local: "staging"
+      staging: "staging"
+      production: "production"
+
+  VITE_BASE_URL:
+    description: "Base URL for the app"
+    sensitive: false
+    source: static
+    values:
+      local: "{base_url}"
+      staging: "{base_url}"
+      production: "{base_url}"
+
+  VITE_PROJECT_ID:
+    description: "Firebase project ID"
+    sensitive: false
+    source: static
+    values:
+      local: "{firebase_project}"
+      staging: "{firebase_project}"
+      production: "{firebase_project}"
+
+  VITE_API_KEY:
+    description: "API key fetched from a source"
+    sensitive: true
+    source: echo-source
+    source_key: API_KEY
+    environments: [local, staging, production]
+
+  VITE_OPTIONAL_FLAG:
+    description: "Optional feature flag"
+    sensitive: false
+    source: static
+    required: false
+    values:
+      local: "true"
+      staging: "true"
+      production: "false"
