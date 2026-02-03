@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 
 /// Top-level schema structure for an envgen YAML schema file.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Schema {
     pub schema_version: String,
     pub metadata: Metadata,
@@ -13,17 +14,20 @@ pub struct Schema {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Metadata {
     pub description: String,
     pub destination: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Source {
     pub command: String,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct Variable {
     pub description: String,
 
@@ -64,6 +68,7 @@ pub struct Variable {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct VariableResolver {
     pub environments: Vec<String>,
     pub source: String,
@@ -104,7 +109,7 @@ impl Variable {
     pub fn effective_source_for_env(&self, env: &str) -> Option<&str> {
         self.resolver_for_env(env)
             .map(|r| r.source.as_str())
-            .or_else(|| self.source.as_deref())
+            .or(self.source.as_deref())
     }
 
     /// Returns the key to use in source command templates.
@@ -119,7 +124,7 @@ impl Variable {
     pub fn values_for_env(&self, env: &str) -> Option<&BTreeMap<String, String>> {
         self.resolver_for_env(env)
             .and_then(|r| r.values.as_ref())
-            .or_else(|| self.values.as_ref())
+            .or(self.values.as_ref())
     }
 }
 

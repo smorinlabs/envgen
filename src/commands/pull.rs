@@ -215,10 +215,8 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                         static_results.push(ResolveResult::Success(var_name.to_string(), value));
                     }
                     Err(e) => {
-                        static_results.push(ResolveResult::Failed(
-                            var_name.to_string(),
-                            e.to_string(),
-                        ));
+                        static_results
+                            .push(ResolveResult::Failed(var_name.to_string(), e.to_string()));
                     }
                 },
                 None => {
@@ -253,10 +251,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                     ));
                 }
                 Err(e) => {
-                    static_results.push(ResolveResult::Failed(
-                        var_name.to_string(),
-                        e.to_string(),
-                    ));
+                    static_results.push(ResolveResult::Failed(var_name.to_string(), e.to_string()));
                 }
             }
         }
@@ -330,7 +325,8 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
         .collect();
 
     // Build lookup map from results
-    let mut result_map: std::collections::HashMap<String, ResolveResult> = std::collections::HashMap::new();
+    let mut result_map: std::collections::HashMap<String, ResolveResult> =
+        std::collections::HashMap::new();
     for result in all_results {
         let name = match &result {
             ResolveResult::Success(n, _) => n.clone(),
@@ -349,12 +345,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
         if let Some(result) = result_map.remove(var_name) {
             match result {
                 ResolveResult::Success(_, value) => {
-                    println!(
-                        "  {} {:<24} ({})",
-                        "✓".green(),
-                        var_name,
-                        source_display
-                    );
+                    println!("  {} {:<24} ({})", "✓".green(), var_name, source_display);
                     resolved_vars.push((var_name.clone(), value));
                 }
                 ResolveResult::Skipped(_, reason) => {

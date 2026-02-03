@@ -19,7 +19,9 @@ fn test_template_expansion_in_dry_run() {
         .assert()
         .success()
         // For local, VITE_API_KEY is static (schema v2 resolvers)
-        .stdout(predicate::str::contains("VITE_API_KEY\n    source:  static"))
+        .stdout(predicate::str::contains(
+            "VITE_API_KEY\n    source:  static",
+        ))
         // Sensitive values are masked by default
         .stdout(predicate::str::contains("value:   API_..."));
 }

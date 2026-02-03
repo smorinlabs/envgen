@@ -29,10 +29,7 @@ pub fn build_command(
 pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<CommandResult> {
     let output = tokio::time::timeout(
         Duration::from_secs(timeout_secs),
-        Command::new("sh")
-            .arg("-c")
-            .arg(command)
-            .output(),
+        Command::new("sh").arg("-c").arg(command).output(),
     )
     .await;
 
@@ -80,9 +77,14 @@ mod tests {
         let template = "echo {key}";
         let env_config = BTreeMap::new();
 
-        let cmd =
-            build_command(template, "VITE_GOOGLE_ID", Some("GOOGLE_ID"), "local", &env_config)
-                .unwrap();
+        let cmd = build_command(
+            template,
+            "VITE_GOOGLE_ID",
+            Some("GOOGLE_ID"),
+            "local",
+            &env_config,
+        )
+        .unwrap();
         assert_eq!(cmd, "echo GOOGLE_ID");
     }
 

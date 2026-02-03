@@ -57,7 +57,7 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
 
         let applicable_envs: Vec<&String> = match &var.environments {
             Some(envs) => envs.iter().collect(),
-            None => env_names.iter().copied().collect(),
+            None => env_names.to_vec(),
         };
 
         let has_resolvers = var.resolvers.as_ref().is_some_and(|r| !r.is_empty());
@@ -105,7 +105,7 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                             var_name, env
                         ));
                     }
-                    if !applicable_envs.iter().any(|e| *e == env) {
+                    if !applicable_envs.contains(&env) {
                         errors.push(format!(
                             "{}: resolver references environment \"{}\" which is not applicable to this variable.",
                             var_name, env

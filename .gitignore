@@ -1,3 +1,5 @@
 /target
 *.env
 .envtool-cache
+.uv-cache
+.uv-tools

@@ -21,11 +21,7 @@ impl ListFormat {
 }
 
 /// Run the `list` command: display variables defined in the schema.
-pub fn run_list(
-    schema_path: &Path,
-    env_filter: Option<&str>,
-    format: ListFormat,
-) -> Result<()> {
+pub fn run_list(schema_path: &Path, env_filter: Option<&str>, format: ListFormat) -> Result<()> {
     let schema = parse_schema_file(schema_path)?;
 
     // Validate env filter if provided

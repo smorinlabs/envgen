@@ -12,8 +12,7 @@ pub fn parse_schema_file(path: &Path) -> Result<Schema> {
 
 /// Parse a YAML schema from a string.
 pub fn parse_schema(yaml: &str) -> Result<Schema> {
-    let schema: Schema =
-        serde_yaml::from_str(yaml).context("Failed to parse schema YAML")?;
+    let schema: Schema = serde_yaml::from_str(yaml).context("Failed to parse schema YAML")?;
     Ok(schema)
 }
 

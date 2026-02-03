@@ -96,17 +96,33 @@ enum Commands {
         #[arg(long, default_value = "table")]
         format: String,
     },
+
+    /// Export the embedded JSON Schema used to validate envgen YAML schemas
+    Schema {
+        /// Output path (file or directory)
+        #[arg(short, long)]
+        output: Option<PathBuf>,
+
+        /// Print to stdout instead of writing a file
+        #[arg(long)]
+        stdout: bool,
+
+        /// Overwrite the destination file if it already exists
+        #[arg(short, long)]
+        force: bool,
+
+        /// Suppress success output
+        #[arg(short, long)]
+        quiet: bool,
+    },
 }
 
 fn resolve_schema_path(global: &Option<PathBuf>, local: &Option<PathBuf>) -> PathBuf {
     // Local (subcommand) flag takes precedence over global
-    local
-        .clone()
-        .or_else(|| global.clone())
-        .unwrap_or_else(|| {
-            eprintln!("Error: --schema is required. Specify the path to a YAML schema file.");
-            process::exit(1);
-        })
+    local.clone().or_else(|| global.clone()).unwrap_or_else(|| {
+        eprintln!("Error: --schema is required. Specify the path to a YAML schema file.");
+        process::exit(1);
+    })
 }
 
 #[tokio::main]
@@ -191,6 +207,35 @@ async fn main() {
                 Err(e) => {
                     eprintln!("Error: {:#}", e);
                     1
+                }
+            }
+        }
+        Commands::Schema {
+            ref output,
+            stdout,
+            force,
+            quiet,
+        } => {
+            if stdout {
+                match commands::schema::run_schema_print() {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        eprintln!("Error: {:#}", e);
+                        1
+                    }
+                }
+            } else {
+                let opts = commands::schema::SchemaExportOptions {
+                    output_path: output.clone(),
+                    force,
+                    quiet,
+                };
+                match commands::schema::run_schema_export(opts) {
+                    Ok(()) => 0,
+                    Err(e) => {
+                        eprintln!("Error: {:#}", e);
+                        1
+                    }
                 }
             }
         }

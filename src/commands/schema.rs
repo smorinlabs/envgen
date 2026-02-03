@@ -2,12 +2,9 @@ use anyhow::{bail, Result};
 use std::fs;
 use std::path::PathBuf;
 
-const SAMPLE_SCHEMA: &str = include_str!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/schemas/envgen.sample.yaml"
-));
+use crate::schema;
 
-pub struct InitOptions {
+pub struct SchemaExportOptions {
     pub output_path: Option<PathBuf>,
     pub force: bool,
     pub quiet: bool,
@@ -17,16 +14,21 @@ fn resolve_output_path(output: Option<PathBuf>) -> PathBuf {
     match output {
         Some(path) => {
             if path.exists() && path.is_dir() {
-                path.join("env.dev.yaml")
+                path.join(schema::JSON_SCHEMA_FILENAME)
             } else {
                 path
             }
         }
-        None => PathBuf::from("env.dev.yaml"),
+        None => PathBuf::from(schema::JSON_SCHEMA_FILENAME),
     }
 }
 
-pub fn run_init(opts: InitOptions) -> Result<()> {
+pub fn run_schema_print() -> Result<()> {
+    print!("{}", schema::JSON_SCHEMA);
+    Ok(())
+}
+
+pub fn run_schema_export(opts: SchemaExportOptions) -> Result<()> {
     let dest_path = resolve_output_path(opts.output_path);
 
     if dest_path.exists() && dest_path.is_dir() {
@@ -43,10 +45,10 @@ pub fn run_init(opts: InitOptions) -> Result<()> {
         );
     }
 
-    fs::write(&dest_path, SAMPLE_SCHEMA)?;
+    fs::write(&dest_path, schema::JSON_SCHEMA)?;
 
     if !opts.quiet {
-        println!("Wrote sample schema to {}", dest_path.display());
+        println!("Wrote JSON Schema to {}", dest_path.display());
     }
 
     Ok(())
