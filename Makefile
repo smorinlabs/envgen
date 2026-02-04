@@ -13,6 +13,7 @@ YAMLLINT ?= yamllint
 YAMLLINT_VERSION ?= 1.38.0
 YAMLFMT ?= yamlfmt
 YAMLFMT_VERSION ?= v0.15.0
+ACTIONLINT ?= actionlint
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
 CARGO_VERSION := $(shell python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")
@@ -47,9 +48,10 @@ check-tools: ## Verify required tooling is installed
 	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found. Run: make install-node"; exit 1; }
 	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Run: make install-uv"; exit 1; }
 	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yaml-tools"; exit 1; }
+	@command -v $(ACTIONLINT) >/dev/null 2>&1 || { echo "ERROR: $(ACTIONLINT) not found. Run: make install-actionlint"; exit 1; }
 
 .PHONY: install-tools
-install-tools: install-rust-tools install-cargo-tools install-node install-uv install-pre-commit install-yaml-tools ## Install all required tooling
+install-tools: install-rust-tools install-cargo-tools install-node install-uv install-pre-commit install-yaml-tools install-actionlint ## Install all required tooling
 
 .PHONY: install-rust-tools
 install-rust-tools: ## Install Rust components (rustfmt, clippy)
@@ -113,6 +115,16 @@ install: ## Install envgen to ~/.cargo/bin
 .PHONY: pre-commit-setup
 pre-commit-setup: check-tools ## Install git pre-commit hook
 	pre-commit install
+
+# ─── GitHub Actions Lint ────────────────────────────────────────
+
+.PHONY: install-actionlint
+install-actionlint: ## Install actionlint
+	curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- -b ~/.local/bin
+
+.PHONY: lint-actions
+lint-actions: ## Lint GitHub Actions workflows
+	$(ACTIONLINT)
 
 # ─── YAML Lint & Format (Fixtures) ──────────────────────────────
 

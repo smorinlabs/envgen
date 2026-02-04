@@ -41,3 +41,8 @@ repos:
         entry: cargo machete
         language: system
         pass_filenames: false
+      - id: actionlint
+        name: actionlint
+        entry: make lint-actions
+        language: system
+        pass_filenames: false

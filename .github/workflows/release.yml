@@ -288,14 +288,17 @@ jobs:
     name: Open homebrew-core bump PR
     needs: [meta, verify, publish-crates]
     runs-on: macos-latest
-    if: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN != '' }}
+    env:
+      HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
     steps:
       - name: Brew update
+        if: ${{ env.HOMEBREW_GITHUB_API_TOKEN != '' }}
         run: brew update
 
       - name: Check formula exists
         id: formula
         shell: bash
+        if: ${{ env.HOMEBREW_GITHUB_API_TOKEN != '' }}
         run: |
           if brew info envgen >/dev/null 2>&1; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
@@ -304,9 +307,7 @@ jobs:
           fi
 
       - name: Bump formula PR
-        if: ${{ steps.formula.outputs.exists == 'true' }}
-        env:
-          HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
+        if: ${{ env.HOMEBREW_GITHUB_API_TOKEN != '' && steps.formula.outputs.exists == 'true' }}
         run: |
           brew bump-formula-pr \
             --tag "${{ needs.meta.outputs.tag }}" \
