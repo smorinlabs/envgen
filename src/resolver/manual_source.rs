@@ -15,6 +15,24 @@ pub struct ManualResolveOptions<'a> {
     pub non_interactive: bool,
 }
 
+fn print_labeled_multiline(indent: &str, label: &str, value: &str) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+
+    let lines: Vec<&str> = value.lines().collect();
+    if lines.len() == 1 {
+        println!("{}{}: {}", indent, label, lines[0]);
+        return;
+    }
+
+    println!("{}{}:", indent, label);
+    for line in lines {
+        println!("{}  {}", indent, line);
+    }
+}
+
 /// Prompt the user for a manual variable value.
 /// Returns None if non-interactive mode is enabled.
 pub fn resolve_manual(opts: ManualResolveOptions<'_>) -> Result<Option<String>> {
@@ -31,7 +49,7 @@ pub fn resolve_manual(opts: ManualResolveOptions<'_>) -> Result<Option<String>> 
 
     if let Some(instructions) = opts.source_instructions {
         let expanded = expand_instructions(instructions, &ctx);
-        println!("  Instructions: {}", expanded.trim());
+        print_labeled_multiline("  ", "Instructions", &expanded);
     }
 
     println!();

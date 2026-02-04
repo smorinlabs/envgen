@@ -43,7 +43,7 @@ variables:
   #
   # Common optional fields:
   # - sensitive: true|false (defaults to true; controls masking in output)
-  # - source_instructions: shown for manual sources to help people find the value
+  # - source_instructions: shown for manual sources to help people find the value (supports multi-line with |)
   # - notes: free-form metadata for humans
   # - environments: limit a variable to specific environments
   # - resolvers: (schema v2) pick different sources per environment
@@ -61,7 +61,16 @@ variables:
   API_TOKEN:
     description: "API token used for local development."
     source: manual
-    source_instructions: "Create a token in your admin UI and paste it here."
+    source_instructions: |
+      Example (GitHub fine-grained personal access token):
+      1) Go to https://github.com and sign in.
+      2) Click your avatar (top-right) -> Settings.
+      3) Scroll to the bottom of the left sidebar -> Developer settings.
+      4) Personal access tokens -> Fine-grained tokens -> Generate new token.
+      5) Set an expiration date, limit repository access, and grant least-privilege permissions.
+      6) Click Generate token and copy it immediately (you won't be able to see it again).
+      7) Paste the token here when prompted by envgen.
+      Tip: Store it in a password manager and rotate it regularly.
     notes: "Rotate quarterly."
 
   BUILD_ID:

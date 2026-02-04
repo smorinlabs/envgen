@@ -24,6 +24,24 @@ enum ResolveResult {
     Failed(String, String),  // (var_name, error)
 }
 
+fn print_labeled_multiline(indent: &str, label: &str, value: &str) {
+    let value = value.trim();
+    if value.is_empty() {
+        return;
+    }
+
+    let lines: Vec<&str> = value.lines().collect();
+    if lines.len() == 1 {
+        println!("{}{}: {}", indent, label, lines[0]);
+        return;
+    }
+
+    println!("{}{}:", indent, label);
+    for line in lines {
+        println!("{}  {}", indent, line);
+    }
+}
+
 /// Run the `pull` command: resolve variables and write the .env file.
 pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     // Parse and validate schema
@@ -162,7 +180,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                     println!("    source:  manual (skipped; use --interactive to prompt)");
                 }
                 if let Some(instructions) = &var.source_instructions {
-                    println!("    instructions: {}", instructions.trim());
+                    print_labeled_multiline("    ", "instructions", instructions);
                 }
                 println!();
             } else {

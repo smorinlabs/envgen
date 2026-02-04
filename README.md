@@ -52,7 +52,16 @@ Variables to resolve:
 
   API_TOKEN
     source:  manual (interactive prompt)
-    instructions: Create a token in your admin UI and paste it here.
+    instructions:
+      Example (GitHub fine-grained personal access token):
+      1) Go to https://github.com and sign in.
+      2) Click your avatar (top-right) -> Settings.
+      3) Scroll to the bottom of the left sidebar -> Developer settings.
+      4) Personal access tokens -> Fine-grained tokens -> Generate new token.
+      5) Set an expiration date, limit repository access, and grant least-privilege permissions.
+      6) Click Generate token and copy it immediately (you won't be able to see it again).
+      7) Paste the token here when prompted by envgen.
+      Tip: Store it in a password manager and rotate it regularly.
 
   APP_NAME
     source:  static
@@ -189,14 +198,21 @@ variables:
       production: "{base_url}"
 
   VITE_API_KEY:
-    description: "API key (local is static; prod comes from Secret Manager)"
+    description: "API key (prompt locally; prod comes from Secret Manager)"
     source_key: API_KEY
+    source_instructions: |
+      Example (GitHub fine-grained personal access token):
+      1) Go to https://github.com and sign in.
+      2) Click your avatar (top-right) -> Settings.
+      3) Scroll to the bottom of the left sidebar -> Developer settings.
+      4) Personal access tokens -> Fine-grained tokens -> Generate new token.
+      5) Set an expiration date, limit repository access, and grant least-privilege permissions.
+      6) Click Generate token and copy it immediately (you won't be able to see it again).
+      7) Save it somewhere secure (you won't be able to view it again later).
     environments: [local, production]
     resolvers:
       - environments: [local]
-        source: static
-        values:
-          local: "API_KEY-local"
+        source: manual
       - environments: [production]
         source: gcloud
 ```
