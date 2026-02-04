@@ -2,6 +2,7 @@
 # Common invocations for development and environment setup
 
 ENVGEN := cargo run --
+UV ?= uv
 UVX ?= uvx
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 UV_TOOL_DIR ?= $(CURDIR)/.uv-tools
@@ -14,7 +15,7 @@ YAMLFMT ?= yamlfmt
 YAMLFMT_VERSION ?= v0.15.0
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
-CARGO_VERSION := $(shell awk -F ' = ' '/^\\[package\\]/{in_pkg=1;next} /^\\[/{in_pkg=0} in_pkg && $$1=="version"{gsub(/"/,"",$$2); print $$2; exit}' Cargo.toml)
+CARGO_VERSION := $(shell python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")
 SCHEMA_FILE := schemas/envgen.schema.v$(CARGO_VERSION).json
 
 # ─── Build & Test ────────────────────────────────────────────────
@@ -32,7 +33,67 @@ test: check-schema ## Run all tests
 	cargo test
 
 .PHONY: check
-check: check-code test check-yaml-fixtures check-schema ## Run all checks (CI)
+check: check-tools check-code test check-yaml-fixtures check-schema ## Run all checks (CI)
+
+.PHONY: check-tools
+check-tools: ## Verify required tooling is installed
+	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	@cargo fmt --version >/dev/null 2>&1 || { echo "ERROR: rustfmt not found. Run: make install-rust-tools (or rustup component add rustfmt)"; exit 1; }
+	@cargo clippy --version >/dev/null 2>&1 || { echo "ERROR: clippy not found. Run: make install-rust-tools (or rustup component add clippy)"; exit 1; }
+	@command -v cargo-audit >/dev/null 2>&1 || { echo "ERROR: cargo-audit not found. Run: make install-cargo-tools (or cargo install cargo-audit)"; exit 1; }
+	@command -v cargo-machete >/dev/null 2>&1 || { echo "ERROR: cargo-machete not found. Run: make install-cargo-tools (or cargo install cargo-machete)"; exit 1; }
+	@command -v typos >/dev/null 2>&1 || { echo "ERROR: typos not found. Run: make install-cargo-tools (or cargo install typos-cli)"; exit 1; }
+	@command -v pre-commit >/dev/null 2>&1 || { echo "ERROR: pre-commit not found. Run: make install-pre-commit (or uv tool install pre-commit / brew install pre-commit / pipx install pre-commit)"; exit 1; }
+	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found. Run: make install-node"; exit 1; }
+	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Run: make install-uv"; exit 1; }
+	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yaml-tools"; exit 1; }
+
+.PHONY: install-tools
+install-tools: install-rust-tools install-cargo-tools install-node install-uv install-pre-commit install-yaml-tools ## Install all required tooling
+
+.PHONY: install-rust-tools
+install-rust-tools: ## Install Rust components (rustfmt, clippy)
+	@command -v rustup >/dev/null 2>&1 || { echo "ERROR: rustup not found. Install Rust from https://rustup.rs/."; exit 1; }
+	rustup component add rustfmt clippy
+
+.PHONY: install-cargo-tools
+install-cargo-tools: ## Install cargo-audit, cargo-machete, and typos
+	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	cargo install cargo-audit cargo-machete typos-cli
+
+.PHONY: install-pre-commit
+install-pre-commit: ## Install pre-commit (prefers uv, then pipx, then brew, then pip)
+	@if command -v pre-commit >/dev/null 2>&1; then \
+		echo "pre-commit already installed."; \
+	elif command -v $(UV) >/dev/null 2>&1; then \
+		UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UV) tool install pre-commit; \
+	elif command -v pipx >/dev/null 2>&1; then \
+		pipx install pre-commit; \
+	elif command -v brew >/dev/null 2>&1; then \
+		brew install pre-commit; \
+	elif command -v pip >/dev/null 2>&1; then \
+		pip install --user pre-commit; \
+	else \
+		echo "ERROR: pre-commit not found. Install with: uv tool install pre-commit (recommended), or brew install pre-commit, or pipx install pre-commit."; \
+		exit 1; \
+	fi
+
+.PHONY: install-node
+install-node: ## Ensure Node.js (npx) is available
+	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found. Install Node.js (includes npx)."; exit 1; }
+
+.PHONY: install-uv
+install-uv: ## Install uv (provides uvx)
+	@if command -v $(UVX) >/dev/null 2>&1; then \
+		echo "$(UVX) already installed."; \
+	elif command -v brew >/dev/null 2>&1; then \
+		brew install uv; \
+	elif command -v curl >/dev/null 2>&1; then \
+		curl -LsSf https://astral.sh/uv/install.sh | sh; \
+	else \
+		echo "ERROR: uv not found. Install from https://astral.sh/uv/ or install curl."; \
+		exit 1; \
+	fi
 
 .PHONY: check-code
 check-code: ## Run clippy and format check
@@ -46,6 +107,12 @@ fmt: ## Format all code
 .PHONY: install
 install: ## Install envgen to ~/.cargo/bin
 	cargo install --path .
+
+# ─── Pre-commit ────────────────────────────────────────────────
+
+.PHONY: pre-commit-setup
+pre-commit-setup: check-tools ## Install git pre-commit hook
+	pre-commit install
 
 # ─── YAML Lint & Format (Fixtures) ──────────────────────────────
 

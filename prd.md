@@ -185,7 +185,7 @@ This field may be omitted (it defaults to an empty map) if all variables are sou
 The special source names `static` and `manual` are built-in and must not be redefined:
 
 - **`static`** — Value is defined inline in the variable's `values` map. No command is executed.
-- **`manual`** — User provides the value interactively at the prompt (or the variable is skipped in `--non-interactive` mode).
+- **`manual`** — User provides the value interactively at the prompt (or the variable is skipped unless `--interactive` is set).
 
 #### `variables` (required)
 Map of variable name → variable definition.
@@ -252,7 +252,6 @@ cargo run -- <command>
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--schema <path>` | `-s` | Path to schema YAML file. **Required** for `pull`, `check`, and `list`. Can be passed globally or on the subcommand. |
 | `--help` | `-h` | Show help |
 | `--version` | `-V` | Show version |
 
@@ -263,38 +262,39 @@ cargo run -- <command>
 Resolve all variables for the target environment and write the destination `.env` file.
 
 ```
-envgen pull --schema config/frontend.env-schema.yaml --env staging
+envgen pull -c config/frontend.env-schema.yaml -e staging
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
+| `--config <path>` | `-c` | Path to envgen YAML config file. **Required.** |
 | `--env <name>` | `-e` | Target environment. Defaults to `local`. |
-| `--dry-run` | `-n` | Print what would be written and which commands would run, without executing anything. Sensitive values are masked unless `--unmask` is also set. |
-| `--unmask` | | Show actual sensitive values in dry-run output. |
-| `--force` | `-f` | Overwrite the destination file if it already exists. Without this flag, the tool errors if the file exists. |
-| `--non-interactive` | | Skip `manual` source variables instead of prompting. Emit a warning for each skipped variable. |
-| `--output <path>` | `-o` | Override the destination path from the schema. |
-| `--timeout <seconds>` | | Timeout in seconds for source commands (default: 30). |
+| `--dry-run` | `-n` | Print what would be written and which commands would run, without executing anything. Sensitive values are masked unless `--show-secrets` is also set. |
+| `--show-secrets` | | Show actual sensitive values in dry-run output. Requires `--dry-run`. |
+| `--force` | `-f` | Overwrite the destination file if it already exists. Without this flag, the tool errors if the file exists (even in dry-run). |
+| `--interactive` | `-i` | Prompt for `manual` source variables. Default behavior is to skip them (warning only). |
+| `--destination <path>` | `-d` | Override the destination path from the schema. If a directory is provided, uses the schema destination file name. |
+| `--source-timeout <seconds>` | | Timeout in seconds for each source command (default: 30). |
 
 **Behavior:**
 
 1. Parse and validate the schema file.
 2. Determine the destination file path:
-   - If `--output` is set, use it.
+   - If `--destination` is set, use it (if it’s a directory, use the schema destination file name inside it).
    - Otherwise, use `metadata.destination[env]`.
-3. If destination file exists and `--force` is not set → error with message.
+3. If destination file exists and `--force` is not set → error with message (even in dry-run).
 4. For each variable applicable to the target environment:
    - Determine its effective source for that environment:
      - If `resolvers` is set (schema v2), pick the resolver whose `environments` contains the target env.
      - Otherwise, use `source` (schema v1-style).
    - `static`: Read from the appropriate `values[env]`, expand any `{placeholder}` references.
-   - `manual`: Prompt for input (or skip if `--non-interactive`). Show `description` and `source_instructions`.
+   - `manual`: Prompt for input if `--interactive` is set; otherwise skip with a warning. Show `description` and `source_instructions` when prompting.
    - Any other source: Build the command from the source template, substituting `{key}`, `{environment}`, and environment config values. Execute it and capture stdout (trimmed).
 5. If resolving a variable fails:
    - The variable is omitted from the output file.
    - If `required: true`, this counts as a failure and `pull` exits with code 1 (after attempting all variables).
    - If `required: false`, this is treated as a warning and does not affect exit code.
-   - In `--non-interactive` mode, `manual` variables are always skipped (warning) regardless of `required`.
+   - When not using `--interactive`, `manual` variables are always skipped (warning) regardless of `required`.
 6. Write the output file (if at least one variable was resolved). Include a header comment with generation metadata.
    - Values are written as `KEY=VALUE`.
    - Values are quoted and escaped when needed (e.g., spaces, `#`, quotes, newlines).
@@ -310,7 +310,7 @@ envgen pull --schema config/frontend.env-schema.yaml --env staging
 # Generated at: 2026-02-03T12:00:00Z
 #
 # DO NOT EDIT — regenerate with:
-#   envgen pull -s config/frontend.env-schema.yaml -e staging --force
+#   envgen pull -c config/frontend.env-schema.yaml -e staging --interactive --force
 
 VITE_ENV=staging
 VITE_FIREBASE_PROJECT_ID=get-bank-sheets-staging
@@ -322,7 +322,7 @@ VITE_GOOGLE_CLIENT_ID=abc123...
 Validate a schema file for correctness.
 
 ```
-envgen check --schema config/frontend.env-schema.yaml
+envgen check -c config/frontend.env-schema.yaml
 ```
 
 **Validates:**
@@ -362,11 +362,12 @@ Exit code 0 on success, 1 on failure.
 Display a table of all variables defined in the schema.
 
 ```
-envgen list --schema config/backend.env-schema.yaml
+envgen list -c config/backend.env-schema.yaml
 ```
 
 | Flag | Description |
 |------|-------------|
+| `--config <path>` (`-c`) | Path to envgen YAML config file (required) |
 | `--env <name>` (`-e`) | Filter to variables applicable to a specific environment |
 | `--format <fmt>` | Output format: `table` (default), `json` |
 
@@ -396,6 +397,19 @@ OPENAI_API_KEY          local, staging, prod     firebase-sm
 
 **JSON format:** `list --format json` outputs an array of objects containing `name`, `description`, `source` (summary), `sensitive`, `required`, `environments`, and optional `notes`.
 
+#### `envgen docs`
+
+Generate Markdown documentation for a schema file.
+
+```
+envgen docs -c config/frontend.env-schema.yaml
+```
+
+| Flag | Description |
+|------|-------------|
+| `--config <path>` (`-c`) | Path to envgen YAML config file (required) |
+| `--env <name>` (`-e`) | Filter to variables applicable to a specific environment |
+
 #### `envgen init`
 
 Create a sample schema file (`env.dev.yaml`) to use as a starting point.
@@ -412,7 +426,7 @@ envgen init
 
 #### `envgen schema`
 
-Export the embedded JSON Schema used to validate envgen YAML schemas.
+Export the embedded JSON Schema used for runtime structural validation and editor tooling.
 
 ```
 envgen schema
@@ -421,7 +435,7 @@ envgen schema
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--output <path>` | `-o` | Output file or directory. If the path exists and is a directory, writes `envgen.schema.v<version>.json` inside it. |
-| `--stdout` | | Print to stdout instead of writing a file. |
+| `--output -` | | Print to stdout instead of writing a file. |
 | `--force` | `-f` | Overwrite the destination file if it already exists. |
 | `--quiet` | `-q` | Suppress success output. |
 
@@ -525,7 +539,7 @@ If a command template contains `{foo}` and `foo` is not defined in the environme
 ### 9.1 Dry Run Output
 
 ```
-$ envgen pull -s config/backend.env-schema.yaml -e staging --dry-run
+$ envgen pull -c config/backend.env-schema.yaml -e staging --dry-run
 
 Schema:      config/backend.env-schema.yaml
 Environment: staging
@@ -550,7 +564,7 @@ Variables to resolve:
 ### 9.2 Pull Output
 
 ```
-$ envgen pull -s config/backend.env-schema.yaml -e staging --force
+$ envgen pull -c config/backend.env-schema.yaml -e staging --force
 
 Pulling 9 variables for environment "staging"...
 
@@ -581,9 +595,9 @@ Exit code: 1
 | Schema validation fails | Error with all issues listed, exit 1 |
 | Destination file exists (no `--force`) | Error: "Destination file already exists. Use --force to overwrite." Exit 1 |
 | Source command fails | Warn, skip variable, continue. Summarize at end. Exit 1 if any required variable failed. |
-| Source command times out | Default 30s timeout per command. `--timeout <seconds>` to override. Treated as failure. |
+| Source command times out | Default 30s timeout per command. `--source-timeout <seconds>` to override. Treated as failure. |
 | Unresolved template placeholder | Error at validation time, before executing any commands. Exit 1. |
-| Manual source in `--non-interactive` | Warn, skip. Variable omitted from output (does not affect exit code). |
+| Manual source when `--interactive` is not set | Warn, skip. Variable omitted from output (does not affect exit code). |
 | Environment not defined in schema | Error: "Environment 'foo' not found. Available: local, staging, production." Exit 1. |
 | Variable has no value for target env | If `source: static` and no entry in `values` for the env → schema validation error. |
 
@@ -599,7 +613,9 @@ envgen/
 │   ├── schema/
 │   │   ├── mod.rs
 │   │   ├── parser.rs        # YAML deserialization (serde_yaml)
-│   │   ├── validator.rs     # Schema validation logic
+│   │   ├── structural.rs    # JSON Schema structural validation (jsonschema crate)
+│   │   ├── validation.rs    # Shared validation pipeline (structural + semantic)
+│   │   ├── validator.rs     # Semantic validation logic
 │   │   └── types.rs         # Schema data structures
 │   ├── commands/
 │   │   ├── mod.rs
@@ -634,6 +650,7 @@ envgen/
 |-------|---------|
 | `clap` | CLI argument parsing with derive macros |
 | `serde` + `serde_yaml` | Schema deserialization |
+| `jsonschema` | JSON Schema structural validation (Draft 2020-12) |
 | `tokio` | Async command execution with timeout |
 | `comfy-table` | Table output formatting |
 | `dialoguer` | Interactive prompts for manual source |
@@ -799,32 +816,32 @@ variables:
 # Create a starter schema file
 envgen init
 
-# Export the JSON Schema for editor tooling
-envgen schema --stdout > envgen.schema.json
+# Export the JSON Schema for editor tooling (also used at runtime)
+envgen schema --output - > envgen.schema.json
 
 # Validate the schema
-envgen check -s config/frontend.env-schema.yaml
+envgen check -c config/frontend.env-schema.yaml
 
 # Preview what would be generated for local dev
-envgen pull -s config/frontend.env-schema.yaml --dry-run
+envgen pull -c config/frontend.env-schema.yaml --dry-run
 
 # Generate local frontend .env
-envgen pull -s config/frontend.env-schema.yaml
+envgen pull -c config/frontend.env-schema.yaml --interactive
 
 # Generate staging backend env (explicit env, force overwrite)
-envgen pull -s config/backend.env-schema.yaml -e staging --force
+envgen pull -c config/backend.env-schema.yaml -e staging --force
 
 # List all backend variables
-envgen list -s config/backend.env-schema.yaml
+envgen list -c config/backend.env-schema.yaml
 
 # List only production variables as JSON
-envgen list -s config/backend.env-schema.yaml -e production --format json
+envgen list -c config/backend.env-schema.yaml -e production --format json
 
-# Non-interactive pull (CI/CD — skip manual prompts)
-envgen pull -s config/frontend.env-schema.yaml -e staging --non-interactive
+# Interactive pull (prompt for manual values)
+envgen pull -c config/frontend.env-schema.yaml -e staging --interactive
 
 # Override output path
-envgen pull -s config/backend.env-schema.yaml -o /tmp/test.env --force
+envgen pull -c config/backend.env-schema.yaml --destination /tmp/test.env --force
 ```
 
 ---
@@ -838,7 +855,7 @@ envgen pull -s config/backend.env-schema.yaml -o /tmp/test.env --force
 | **Parallel command execution** | Parallel by default. Source commands run concurrently via tokio for faster resolution. |
 | **Caching** | Not needed for v1. Each pull fetches fresh values. |
 | **Value validation** | Not needed for v1. No regex/enum validation on resolved values. Deferred to a future version. |
-| **Secrets masking in output file** | Real values are written to the output file. Masking is applied only to stdout during dry-run (unless `--unmask` is set). |
+| **Secrets masking in output file** | Real values are written to the output file. Masking is applied only to stdout during dry-run (unless `--show-secrets` is set). |
 | **Schema inheritance** | One schema version field for format versioning, but no frontend/backend inheritance or composition. Each schema is standalone. |
 | **Wrapper scripts** | A Makefile is included with common invocations (e.g., `make env-local` runs pull for both frontend and backend schemas). |
 

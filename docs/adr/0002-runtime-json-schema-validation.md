@@ -2,7 +2,9 @@
 
 Date: 2026-02-04
 
-Status: Accepted
+Status: Superseded
+
+Superseded by 0003: Runtime structural validation via jsonschema crate.
 
 ## Context
 
@@ -42,4 +44,3 @@ To avoid introducing a new dependency in restricted/offline environments, `envge
 - Use a third-party Rust JSON Schema validator crate (adds a dependency; not viable in offline environments).
 - Shell out to external tools like `check-jsonschema` (adds runtime toolchain requirements and complicates distribution).
 - Re-encode the structural rules directly in Rust (risk of drift from the shipped JSON Schema).
-

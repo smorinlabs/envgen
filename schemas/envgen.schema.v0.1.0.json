@@ -1,311 +1,311 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "x-envgen-schema-version": "0.1.0",
-  "title": "envgen YAML schema",
-  "description": "JSON Schema for envgen YAML schema files.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": ["schema_version", "metadata", "environments", "variables"],
-  "properties": {
-    "schema_version": {
-      "type": "string",
-      "enum": ["1", "2"]
-    },
-    "metadata": {
-      "$ref": "#/$defs/metadata"
-    },
-    "environments": {
-      "$ref": "#/$defs/environments"
-    },
-    "sources": {
-      "$ref": "#/$defs/sources"
-    },
-    "variables": {}
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "schema_version": {
-            "const": "1"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "variables": {
-            "$ref": "#/$defs/variables_v1"
-          }
-        }
-      }
-    },
-    {
-      "if": {
-        "properties": {
-          "schema_version": {
-            "const": "2"
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "variables": {
-            "$ref": "#/$defs/variables_v2"
-          }
-        }
-      }
-    }
-  ],
-  "$defs": {
-    "env_name": {
-      "type": "string",
-      "minLength": 1
-    },
-    "metadata": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["description", "destination"],
-      "properties": {
-        "description": {
-          "type": "string",
-          "minLength": 1
-        },
-        "destination": {
-          "type": "object",
-          "description": "Map of environment name -> destination path.",
-          "minProperties": 1,
-          "additionalProperties": {
-            "type": "string",
-            "minLength": 1
-          }
-        }
-      }
-    },
-    "environments": {
-      "type": "object",
-      "description": "Map of environment name -> environment config (string map).",
-      "minProperties": 1,
-      "additionalProperties": {
-        "type": "object",
-        "description": "Environment config (all values are strings).",
-        "propertyNames": {
-          "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-        },
-        "additionalProperties": {
-          "type": "string"
-        }
-      }
-    },
-    "sources": {
-      "type": "object",
-      "description": "Map of source name -> source definition.",
-      "default": {},
-      "propertyNames": {
-        "allOf": [
-          {
-            "pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
-          },
-          {
-            "not": {
-              "enum": ["static", "manual"]
-            }
-          }
-        ]
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/source"
-      }
-    },
-    "source": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["command"],
-      "properties": {
-        "command": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "env_string_map": {
-      "type": "object",
-      "description": "Map of environment name -> value string.",
-      "minProperties": 1,
-      "additionalProperties": {
-        "type": "string"
-      }
-    },
-    "variable_base": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["description"],
-      "properties": {
-        "description": {
-          "type": "string",
-          "minLength": 1
-        },
-        "sensitive": {
-          "type": "boolean",
-          "default": true
-        },
-        "source": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_key": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_instructions": {
-          "type": "string",
-          "minLength": 1
-        },
-        "environments": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/env_name"
-          }
-        },
-        "values": {
-          "$ref": "#/$defs/env_string_map"
-        },
-        "resolvers": {
-          "$ref": "#/$defs/resolvers"
-        },
-        "required": {
-          "type": "boolean",
-          "default": true
-        },
-        "notes": {
-          "type": "string",
-          "minLength": 1
-        }
-      }
-    },
-    "variable_source": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/variable_base"
-        },
-        {
-          "type": "object",
-          "required": ["source"],
-          "not": {
-            "required": ["resolvers"]
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "source": {
-                "const": "static"
-              }
-            }
-          },
-          "then": {
-            "required": ["values"]
-          }
-        }
-      ]
-    },
-    "variable_resolvers": {
-      "allOf": [
-        {
-          "$ref": "#/$defs/variable_base"
-        },
-        {
-          "type": "object",
-          "required": ["resolvers"],
-          "not": {
-            "anyOf": [
-              {
-                "required": ["source"]
-              },
-              {
-                "required": ["values"]
-              }
-            ]
-          }
-        }
-      ]
-    },
-    "resolver": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["environments", "source"],
-      "properties": {
-        "environments": {
-          "type": "array",
-          "minItems": 1,
-          "uniqueItems": true,
-          "items": {
-            "$ref": "#/$defs/env_name"
-          }
-        },
-        "source": {
-          "type": "string",
-          "minLength": 1
-        },
-        "source_key": {
-          "type": "string",
-          "minLength": 1
-        },
-        "values": {
-          "$ref": "#/$defs/env_string_map"
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "source": {
-                "const": "static"
-              }
-            }
-          },
-          "then": {
-            "required": ["values"]
-          }
-        }
-      ]
-    },
-    "resolvers": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "$ref": "#/$defs/resolver"
-      }
-    },
-    "variables_v1": {
-      "type": "object",
-      "description": "Map of variable name -> variable definition (schema_version 1).",
-      "minProperties": 1,
-      "propertyNames": {
-        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-      },
-      "additionalProperties": {
-        "$ref": "#/$defs/variable_source"
-      }
-    },
-    "variables_v2": {
-      "type": "object",
-      "description": "Map of variable name -> variable definition (schema_version 2).",
-      "minProperties": 1,
-      "propertyNames": {
-        "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-      },
-      "additionalProperties": {
-        "oneOf": [
-          {
-            "$ref": "#/$defs/variable_source"
-          },
-          {
-            "$ref": "#/$defs/variable_resolvers"
-          }
-        ]
-      }
-    }
-  }
+	"$schema": "https://json-schema.org/draft/2020-12/schema",
+	"x-envgen-schema-version": "0.1.0",
+	"title": "envgen YAML schema",
+	"description": "JSON Schema for envgen YAML schema files.",
+	"type": "object",
+	"additionalProperties": false,
+	"required": ["schema_version", "metadata", "environments", "variables"],
+	"properties": {
+		"schema_version": {
+			"type": "string",
+			"enum": ["1", "2"]
+		},
+		"metadata": {
+			"$ref": "#/$defs/metadata"
+		},
+		"environments": {
+			"$ref": "#/$defs/environments"
+		},
+		"sources": {
+			"$ref": "#/$defs/sources"
+		},
+		"variables": {}
+	},
+	"allOf": [
+		{
+			"if": {
+				"properties": {
+					"schema_version": {
+						"const": "1"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"variables": {
+						"$ref": "#/$defs/variables_v1"
+					}
+				}
+			}
+		},
+		{
+			"if": {
+				"properties": {
+					"schema_version": {
+						"const": "2"
+					}
+				}
+			},
+			"then": {
+				"properties": {
+					"variables": {
+						"$ref": "#/$defs/variables_v2"
+					}
+				}
+			}
+		}
+	],
+	"$defs": {
+		"env_name": {
+			"type": "string",
+			"minLength": 1
+		},
+		"metadata": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["description", "destination"],
+			"properties": {
+				"description": {
+					"type": "string",
+					"minLength": 1
+				},
+				"destination": {
+					"type": "object",
+					"description": "Map of environment name -> destination path.",
+					"minProperties": 1,
+					"additionalProperties": {
+						"type": "string",
+						"minLength": 1
+					}
+				}
+			}
+		},
+		"environments": {
+			"type": "object",
+			"description": "Map of environment name -> environment config (string map).",
+			"minProperties": 1,
+			"additionalProperties": {
+				"type": "object",
+				"description": "Environment config (all values are strings).",
+				"propertyNames": {
+					"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+				},
+				"additionalProperties": {
+					"type": "string"
+				}
+			}
+		},
+		"sources": {
+			"type": "object",
+			"description": "Map of source name -> source definition.",
+			"default": {},
+			"propertyNames": {
+				"allOf": [
+					{
+						"pattern": "^[A-Za-z0-9][A-Za-z0-9_-]*$"
+					},
+					{
+						"not": {
+							"enum": ["static", "manual"]
+						}
+					}
+				]
+			},
+			"additionalProperties": {
+				"$ref": "#/$defs/source"
+			}
+		},
+		"source": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["command"],
+			"properties": {
+				"command": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"env_string_map": {
+			"type": "object",
+			"description": "Map of environment name -> value string.",
+			"minProperties": 1,
+			"additionalProperties": {
+				"type": "string"
+			}
+		},
+		"variable_base": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["description"],
+			"properties": {
+				"description": {
+					"type": "string",
+					"minLength": 1
+				},
+				"sensitive": {
+					"type": "boolean",
+					"default": true
+				},
+				"source": {
+					"type": "string",
+					"minLength": 1
+				},
+				"source_key": {
+					"type": "string",
+					"minLength": 1
+				},
+				"source_instructions": {
+					"type": "string",
+					"minLength": 1
+				},
+				"environments": {
+					"type": "array",
+					"minItems": 1,
+					"uniqueItems": true,
+					"items": {
+						"$ref": "#/$defs/env_name"
+					}
+				},
+				"values": {
+					"$ref": "#/$defs/env_string_map"
+				},
+				"resolvers": {
+					"$ref": "#/$defs/resolvers"
+				},
+				"required": {
+					"type": "boolean",
+					"default": true
+				},
+				"notes": {
+					"type": "string",
+					"minLength": 1
+				}
+			}
+		},
+		"variable_source": {
+			"allOf": [
+				{
+					"$ref": "#/$defs/variable_base"
+				},
+				{
+					"type": "object",
+					"required": ["source"],
+					"not": {
+						"required": ["resolvers"]
+					}
+				},
+				{
+					"if": {
+						"properties": {
+							"source": {
+								"const": "static"
+							}
+						}
+					},
+					"then": {
+						"required": ["values"]
+					}
+				}
+			]
+		},
+		"variable_resolvers": {
+			"allOf": [
+				{
+					"$ref": "#/$defs/variable_base"
+				},
+				{
+					"type": "object",
+					"required": ["resolvers"],
+					"not": {
+						"anyOf": [
+							{
+								"required": ["source"]
+							},
+							{
+								"required": ["values"]
+							}
+						]
+					}
+				}
+			]
+		},
+		"resolver": {
+			"type": "object",
+			"additionalProperties": false,
+			"required": ["environments", "source"],
+			"properties": {
+				"environments": {
+					"type": "array",
+					"minItems": 1,
+					"uniqueItems": true,
+					"items": {
+						"$ref": "#/$defs/env_name"
+					}
+				},
+				"source": {
+					"type": "string",
+					"minLength": 1
+				},
+				"source_key": {
+					"type": "string",
+					"minLength": 1
+				},
+				"values": {
+					"$ref": "#/$defs/env_string_map"
+				}
+			},
+			"allOf": [
+				{
+					"if": {
+						"properties": {
+							"source": {
+								"const": "static"
+							}
+						}
+					},
+					"then": {
+						"required": ["values"]
+					}
+				}
+			]
+		},
+		"resolvers": {
+			"type": "array",
+			"minItems": 1,
+			"items": {
+				"$ref": "#/$defs/resolver"
+			}
+		},
+		"variables_v1": {
+			"type": "object",
+			"description": "Map of variable name -> variable definition (schema_version 1).",
+			"minProperties": 1,
+			"propertyNames": {
+				"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+			},
+			"additionalProperties": {
+				"$ref": "#/$defs/variable_source"
+			}
+		},
+		"variables_v2": {
+			"type": "object",
+			"description": "Map of variable name -> variable definition (schema_version 2).",
+			"minProperties": 1,
+			"propertyNames": {
+				"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+			},
+			"additionalProperties": {
+				"oneOf": [
+					{
+						"$ref": "#/$defs/variable_source"
+					},
+					{
+						"$ref": "#/$defs/variable_resolvers"
+					}
+				]
+			}
+		}
+	}
 }

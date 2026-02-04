@@ -133,11 +133,18 @@ List variables:
 envgen list -c env.dev.yaml
 ```
 
+Generate Markdown docs:
+
+```bash
+envgen docs -c env.dev.yaml
+```
+
 ## Command summary
 
 - `envgen init`: write a sample schema
 - `envgen check`: validate a schema file
 - `envgen list`: show variables (table by default; `--format json` is available)
+- `envgen docs`: generate Markdown documentation for a schema
 - `envgen pull`: resolve variables and write the destination `.env` file
 - `envgen schema`: export the embedded JSON Schema used for structural validation and editor autocomplete
 
@@ -220,7 +227,9 @@ variables:
 ## JSON Schema (editor validation)
 
 Export the embedded JSON Schema (for YAML Language Server, CI, etc.). This is also the schema `envgen`
-uses for **structural** validation; `envgen check` adds **semantic** validation on top.
+uses for **structural** validation; `envgen check` adds **semantic** validation on top. Structural
+validation is implemented via the `jsonschema` crate (Draft 2020-12) on the YAML parsed into
+`serde_json::Value`.
 
 ```bash
 envgen schema

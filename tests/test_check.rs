@@ -41,7 +41,7 @@ fn test_check_invalid_schema() {
         .failure()
         .stdout(predicate::str::contains("Schema errors"))
         .stdout(predicate::str::contains("STATIC_NO_VALUES"))
-        .stdout(predicate::str::contains("missing required property"));
+        .stdout(predicate::str::contains("required property"));
 }
 
 #[test]
