@@ -43,6 +43,9 @@ pub fn run_init(opts: InitOptions) -> Result<()> {
         );
     }
 
+    if let Some(parent) = dest_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(&dest_path, SAMPLE_SCHEMA)?;
 
     if !opts.quiet {

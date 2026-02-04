@@ -34,7 +34,7 @@ This PRD covers:
 ### 4.1 JSON Schema file (repo)
 
 - Location: `schemas/envgen.schema.v0.1.0.json`
-- Format: JSON Schema (draft-07 for broad tooling compatibility)
+- Format: JSON Schema (draft 2020-12)
 - Scope: Validate both `schema_version: "1"` and `"2"` shapes (via conditionals)
 
 ### 4.2 Embedded in binary (compile time)
@@ -106,7 +106,7 @@ Exports the embedded JSON Schema to a file (defaulting to `envgen.schema.v0.1.0.
 Suggested flags:
 
 - `-o, --output <path>`: output path (file or directory)
-- `--stdout`: print schema to stdout instead of writing a file
+- `-o, --output -`: print schema to stdout instead of writing a file
 - `-f, --force`: overwrite existing file
 - `-q, --quiet`: suppress success output
 
@@ -120,7 +120,7 @@ envgen schema
 envgen schema -o schemas/envgen.schema.v0.1.0.json
 
 # Print to stdout (for CI or redirects):
-envgen schema --stdout > envgen.schema.v0.1.0.json
+envgen schema --output - > envgen.schema.v0.1.0.json
 ```
 
 ---

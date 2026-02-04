@@ -1,0 +1,27 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema with an optional failing command source"
+  destination:
+    local: ".env"
+
+environments:
+  local: {}
+
+sources:
+  fail:
+    command: "exit 1"
+
+variables:
+  OK_STATIC:
+    description: "A static variable that should still be written"
+    sensitive: false
+    source: static
+    values:
+      local: "ok"
+
+  FAIL_OPTIONAL:
+    description: "Optional variable resolved via a failing command"
+    sensitive: false
+    required: false
+    source: fail

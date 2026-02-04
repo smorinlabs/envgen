@@ -29,7 +29,7 @@ The GitHub Actions workflow at `.github/workflows/release.yml` runs when:
    - `git tag vX.Y.Z`
    - `git push origin vX.Y.Z`
 7. Watch the GitHub Actions “Release” workflow:
-   - Verifies the tag build on Linux + macOS (`make check`)
+   - Verifies the tag build on Linux (`make check`) and macOS (Rust fmt/clippy/test)
    - Publishes the crate to crates.io (`cargo publish --locked`)
    - Creates/updates the GitHub Release body using `git-cliff`
    - Builds and uploads binaries for Linux/macOS/Windows as release assets

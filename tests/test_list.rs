@@ -10,7 +10,7 @@ fn envgen() -> Command {
 fn test_list_table_output() {
     envgen()
         .arg("list")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .assert()
         .success()
@@ -24,7 +24,7 @@ fn test_list_table_output() {
 fn test_list_with_env_filter() {
     envgen()
         .arg("list")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_backend.yaml")
         .arg("-e")
         .arg("local")
@@ -38,7 +38,7 @@ fn test_list_with_env_filter() {
 fn test_list_json_format() {
     envgen()
         .arg("list")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("--format")
         .arg("json")
@@ -53,7 +53,7 @@ fn test_list_json_format() {
 fn test_list_invalid_env() {
     envgen()
         .arg("list")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("nonexistent")
@@ -66,11 +66,23 @@ fn test_list_invalid_env() {
 fn test_list_invalid_format() {
     envgen()
         .arg("list")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("--format")
         .arg("csv")
         .assert()
         .failure()
         .stderr(predicate::str::contains("Unknown format"));
+}
+
+#[test]
+fn test_list_invalid_schema_fails() {
+    envgen()
+        .arg("list")
+        .arg("-c")
+        .arg("tests/fixtures/invalid_schema.yaml")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Schema errors"))
+        .stdout(predicate::str::contains("STATIC_NO_VALUES"));
 }

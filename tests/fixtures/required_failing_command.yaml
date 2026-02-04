@@ -1,0 +1,19 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema with a required failing command source"
+  destination:
+    local: ".env"
+
+environments:
+  local: {}
+
+sources:
+  fail:
+    command: "exit 1"
+
+variables:
+  FAIL_REQUIRED:
+    description: "Required variable resolved via a failing command"
+    sensitive: false
+    source: fail

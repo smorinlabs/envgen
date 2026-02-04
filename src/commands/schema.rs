@@ -45,6 +45,9 @@ pub fn run_schema_export(opts: SchemaExportOptions) -> Result<()> {
         );
     }
 
+    if let Some(parent) = dest_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
     fs::write(&dest_path, schema::JSON_SCHEMA)?;
 
     if !opts.quiet {

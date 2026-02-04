@@ -25,7 +25,8 @@ fn test_schema_stdout_prints_schema() {
     let envgen_version = env!("CARGO_PKG_VERSION");
     envgen()
         .arg("schema")
-        .arg("--stdout")
+        .arg("--output")
+        .arg("-")
         .assert()
         .success()
         .stdout(predicate::str::contains("\"$schema\""))
@@ -62,6 +63,22 @@ fn test_schema_output_file() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Wrote JSON Schema"));
+
+    let content = fs::read_to_string(output_path).unwrap();
+    assert_eq!(content, fixture_content());
+}
+
+#[test]
+fn test_schema_creates_parent_directories() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join("schemas/nested/custom.schema.json");
+
+    envgen()
+        .arg("schema")
+        .arg("--output")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .success();
 
     let content = fs::read_to_string(output_path).unwrap();
     assert_eq!(content, fixture_content());

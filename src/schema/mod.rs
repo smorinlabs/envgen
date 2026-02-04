@@ -1,5 +1,7 @@
 pub mod parser;
+pub mod structural;
 pub mod types;
+pub mod validation;
 pub mod validator;
 
 pub const JSON_SCHEMA_FILENAME: &str =
@@ -47,6 +49,11 @@ mod tests {
     #[cfg(target_os = "linux")]
     fn embedded_schema_is_valid_draft_2020_12() {
         let uvx = "uvx";
+
+        if Command::new(uvx).arg("--version").output().is_err() {
+            eprintln!("Skipping Draft 2020-12 meta-validation: `uvx` not found in PATH");
+            return;
+        }
 
         let mut tmp = tempfile::NamedTempFile::new().expect("create temp schema file");
         tmp.write_all(JSON_SCHEMA.as_bytes())

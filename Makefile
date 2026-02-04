@@ -14,7 +14,7 @@ YAMLFMT ?= yamlfmt
 YAMLFMT_VERSION ?= v0.15.0
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
-CARGO_VERSION := $(shell awk -F ' = ' '/^\\[package\\]/{in=1;next} /^\\[/{in=0} in && $$1=="version"{gsub(/"/,"",$$2); print $$2; exit}' Cargo.toml)
+CARGO_VERSION := $(shell awk -F ' = ' '/^\\[package\\]/{in_pkg=1;next} /^\\[/{in_pkg=0} in_pkg && $$1=="version"{gsub(/"/,"",$$2); print $$2; exit}' Cargo.toml)
 SCHEMA_FILE := schemas/envgen.schema.v$(CARGO_VERSION).json
 
 # ─── Build & Test ────────────────────────────────────────────────
@@ -103,11 +103,11 @@ fmt-schema: ## Auto-format the schema file (Biome)
 
 .PHONY: check-frontend
 check-frontend: ## Validate the frontend schema
-	$(ENVGEN) check -s config/frontend.env-schema.yaml
+	$(ENVGEN) check -c config/frontend.env-schema.yaml
 
 .PHONY: check-backend
 check-backend: ## Validate the backend schema
-	$(ENVGEN) check -s config/backend.env-schema.yaml
+	$(ENVGEN) check -c config/backend.env-schema.yaml
 
 .PHONY: check-all
 check-all: check-frontend check-backend ## Validate all schemas
@@ -116,42 +116,42 @@ check-all: check-frontend check-backend ## Validate all schemas
 
 .PHONY: env-local
 env-local: ## Generate all local .env files
-	$(ENVGEN) pull -s config/frontend.env-schema.yaml -e local --force
-	$(ENVGEN) pull -s config/backend.env-schema.yaml -e local --force
+	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e local --force
+	$(ENVGEN) pull -c config/backend.env-schema.yaml -e local --force
 
 .PHONY: env-staging
 env-staging: ## Generate all staging .env files
-	$(ENVGEN) pull -s config/frontend.env-schema.yaml -e staging --force
-	$(ENVGEN) pull -s config/backend.env-schema.yaml -e staging --force
+	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e staging --force
+	$(ENVGEN) pull -c config/backend.env-schema.yaml -e staging --force
 
 .PHONY: env-production
 env-production: ## Generate all production .env files
-	$(ENVGEN) pull -s config/frontend.env-schema.yaml -e production --force
-	$(ENVGEN) pull -s config/backend.env-schema.yaml -e production --force
+	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e production --force
+	$(ENVGEN) pull -c config/backend.env-schema.yaml -e production --force
 
 # ─── Dry Runs ───────────────────────────────────────────────────
 
 .PHONY: dry-run-local
 dry-run-local: ## Preview local .env generation
-	$(ENVGEN) pull -s config/frontend.env-schema.yaml -e local --dry-run
+	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e local --dry-run
 	@echo ""
-	$(ENVGEN) pull -s config/backend.env-schema.yaml -e local --dry-run
+	$(ENVGEN) pull -c config/backend.env-schema.yaml -e local --dry-run
 
 .PHONY: dry-run-staging
 dry-run-staging: ## Preview staging .env generation
-	$(ENVGEN) pull -s config/frontend.env-schema.yaml -e staging --dry-run
+	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e staging --dry-run
 	@echo ""
-	$(ENVGEN) pull -s config/backend.env-schema.yaml -e staging --dry-run
+	$(ENVGEN) pull -c config/backend.env-schema.yaml -e staging --dry-run
 
 # ─── Listing ────────────────────────────────────────────────────
 
 .PHONY: list-frontend
 list-frontend: ## List all frontend variables
-	$(ENVGEN) list -s config/frontend.env-schema.yaml
+	$(ENVGEN) list -c config/frontend.env-schema.yaml
 
 .PHONY: list-backend
 list-backend: ## List all backend variables
-	$(ENVGEN) list -s config/backend.env-schema.yaml
+	$(ENVGEN) list -c config/backend.env-schema.yaml
 
 .PHONY: list-all
 list-all: list-frontend list-backend ## List all variables from all schemas

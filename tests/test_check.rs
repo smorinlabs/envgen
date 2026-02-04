@@ -10,7 +10,7 @@ fn envgen() -> Command {
 fn test_check_valid_schema() {
     envgen()
         .arg("check")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .assert()
         .success()
@@ -24,7 +24,7 @@ fn test_check_valid_schema() {
 fn test_check_valid_backend_schema() {
     envgen()
         .arg("check")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_backend.yaml")
         .assert()
         .success()
@@ -35,20 +35,20 @@ fn test_check_valid_backend_schema() {
 fn test_check_invalid_schema() {
     envgen()
         .arg("check")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/invalid_schema.yaml")
         .assert()
         .failure()
         .stdout(predicate::str::contains("Schema errors"))
-        .stdout(predicate::str::contains("nonexistent-source"))
-        .stdout(predicate::str::contains("no values map"));
+        .stdout(predicate::str::contains("STATIC_NO_VALUES"))
+        .stdout(predicate::str::contains("missing required property"));
 }
 
 #[test]
 fn test_check_missing_file() {
     envgen()
         .arg("check")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/does_not_exist.yaml")
         .assert()
         .failure()
@@ -61,5 +61,18 @@ fn test_check_no_schema_flag() {
         .arg("check")
         .assert()
         .failure()
-        .stderr(predicate::str::contains("--schema"));
+        .stderr(predicate::str::contains("--config"));
+}
+
+#[test]
+fn test_check_semantic_validation_runs_after_structural() {
+    envgen()
+        .arg("check")
+        .arg("-c")
+        .arg("tests/fixtures/semantic_invalid_schema.yaml")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Schema errors"))
+        .stdout(predicate::str::contains("nonexistent-source"))
+        .stdout(predicate::str::contains("not defined in sources"));
 }

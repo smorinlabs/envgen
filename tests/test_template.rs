@@ -11,7 +11,7 @@ fn test_template_expansion_in_dry_run() {
     // The dry-run output should show the effective resolver per environment.
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("local")
@@ -30,7 +30,7 @@ fn test_template_expansion_in_dry_run() {
 fn test_template_expansion_staging() {
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("staging")
@@ -45,7 +45,7 @@ fn test_static_template_expansion_in_dry_run() {
     // Static values with {placeholder} references should be shown expanded
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("production")

@@ -4,6 +4,7 @@ use comfy_table::{ContentArrangement, Table};
 use std::path::Path;
 
 use crate::schema::types::Schema;
+use crate::template;
 
 fn format_source_summary(schema: &Schema, var: &crate::schema::types::Variable) -> String {
     let var_envs: Vec<String> = match &var.environments {
@@ -52,7 +53,7 @@ pub fn write_env_file(
     content.push_str("#\n");
     content.push_str("# DO NOT EDIT — regenerate with:\n");
     content.push_str(&format!(
-        "#   envgen pull -s {} -e {} --force\n",
+        "#   envgen pull -c {} -e {} --interactive --force\n",
         schema_path, env_name
     ));
     content.push('\n');
@@ -192,11 +193,163 @@ pub fn format_variable_json(schema: &Schema, env_filter: Option<&str>) -> Result
     Ok(serde_json::to_string_pretty(&result)?)
 }
 
+pub fn format_schema_docs_markdown(
+    schema_path: &Path,
+    schema: &Schema,
+    env_filter: Option<&str>,
+) -> Result<String> {
+    let mut out = String::new();
+
+    out.push_str("# envgen schema documentation\n\n");
+    out.push_str(&format!("- Schema: `{}`\n", schema_path.display()));
+    out.push_str(&format!("- Schema version: `{}`\n", schema.schema_version));
+    out.push_str(&format!(
+        "- Description: {}\n",
+        schema.metadata.description.trim()
+    ));
+    if let Some(env) = env_filter {
+        out.push_str(&format!("- Environment: `{}`\n", env));
+    }
+    out.push('\n');
+
+    out.push_str("## Environments\n\n");
+    out.push_str("| Environment | Destination |\n");
+    out.push_str("|---|---|\n");
+    for env_name in schema.environment_names() {
+        let dest = schema
+            .metadata
+            .destination
+            .get(&env_name)
+            .map(|s| s.as_str())
+            .unwrap_or("—");
+        out.push_str(&format!("| `{}` | `{}` |\n", env_name, dest));
+    }
+    out.push('\n');
+
+    out.push_str("## Variables\n\n");
+
+    for (var_name, var) in &schema.variables {
+        let var_envs: Vec<String> = match &var.environments {
+            Some(envs) => envs.clone(),
+            None => schema.environment_names(),
+        };
+
+        if let Some(filter) = env_filter {
+            if !var_envs.iter().any(|e| e == filter) {
+                continue;
+            }
+        }
+
+        let source_display = match env_filter {
+            Some(env) => var
+                .effective_source_for_env(env)
+                .unwrap_or("<missing>")
+                .to_string(),
+            None => format_source_summary(schema, var),
+        };
+
+        out.push_str(&format!("### `{}`\n\n", var_name));
+        out.push_str(&format!("{}\n\n", var.description.trim()));
+
+        out.push_str(&format!(
+            "- Environments: {}\n",
+            var_envs
+                .iter()
+                .map(|e| format!("`{}`", e))
+                .collect::<Vec<String>>()
+                .join(", ")
+        ));
+        out.push_str(&format!("- Source: `{}`\n", source_display));
+        out.push_str(&format!("- Sensitive: `{}`\n", var.sensitive));
+        out.push_str(&format!("- Required: `{}`\n", var.required));
+
+        if let Some(instructions) = &var.source_instructions {
+            let rendered = match env_filter {
+                Some(env) => schema
+                    .environments
+                    .get(env)
+                    .map(|env_config| template::build_context(env, env_config, var_name))
+                    .and_then(|ctx| template::expand_template(instructions, &ctx).ok())
+                    .unwrap_or_else(|| instructions.to_string()),
+                None => instructions.to_string(),
+            };
+
+            out.push_str("\n#### Source instructions\n\n```text\n");
+            out.push_str(rendered.trim_end());
+            out.push_str("\n```\n");
+        }
+
+        if let Some(notes) = &var.notes {
+            out.push_str("\n#### Notes\n\n```text\n");
+            out.push_str(notes.trim_end());
+            out.push_str("\n```\n");
+        }
+
+        out.push('\n');
+    }
+
+    Ok(out)
+}
+
 /// Mask a sensitive value for display.
 pub fn mask_value(value: &str, unmask: bool) -> String {
-    if unmask || value.len() <= 4 {
-        value.to_string()
+    if unmask {
+        return value.to_string();
+    }
+
+    let mut chars = value.chars();
+    let prefix: String = chars.by_ref().take(4).collect();
+
+    if chars.next().is_some() {
+        format!("{}...", prefix)
     } else {
-        format!("{}...", &value[..4])
+        "****".to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_write_env_file_quotes_and_escapes_values() {
+        let tmp = TempDir::new().unwrap();
+        let path = tmp.path().join("nested/.env");
+
+        let vars = vec![
+            ("SPACE".to_string(), "hello world".to_string()),
+            ("HASH".to_string(), "abc#def".to_string()),
+            ("QUOTE".to_string(), "he\"llo".to_string()),
+            ("SINGLE_QUOTE".to_string(), "he'llo".to_string()),
+            ("BACKSLASH".to_string(), r"C:\tmp folder\file".to_string()),
+            ("NEWLINE".to_string(), "hello\nworld".to_string()),
+            ("EMPTY".to_string(), "".to_string()),
+        ];
+
+        write_env_file(&path, "schema.yaml", "local", &vars).unwrap();
+
+        let content = fs::read_to_string(&path).unwrap();
+        let lines: Vec<&str> = content.lines().collect();
+
+        assert!(lines.contains(&r#"SPACE="hello world""#));
+        assert!(lines.contains(&r#"HASH="abc#def""#));
+        assert!(lines.contains(&r#"QUOTE="he\"llo""#));
+        assert!(lines.contains(&r#"SINGLE_QUOTE="he'llo""#));
+        assert!(lines.contains(&r#"BACKSLASH="C:\\tmp folder\\file""#));
+        assert!(lines.contains(&r#"NEWLINE="hello\nworld""#));
+        assert!(lines.contains(&r#"EMPTY="""#));
+    }
+
+    #[test]
+    fn test_mask_value_short_and_long() {
+        assert_eq!(mask_value("API_KEY", true), "API_KEY");
+        assert_eq!(mask_value("API_KEY", false), "API_...");
+
+        // Short values are fully masked.
+        assert_eq!(mask_value("", false), "****");
+        assert_eq!(mask_value("abc", false), "****");
+        assert_eq!(mask_value("abcd", false), "****");
     }
 }

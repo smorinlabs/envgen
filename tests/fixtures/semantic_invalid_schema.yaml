@@ -1,0 +1,17 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema with semantic errors only"
+  destination:
+    local: ".env"
+
+environments:
+  local:
+    project: "test"
+
+sources: {}
+
+variables:
+  BAD_SOURCE:
+    description: "References undefined source"
+    source: nonexistent-source

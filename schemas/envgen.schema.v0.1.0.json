@@ -20,9 +20,7 @@
     "sources": {
       "$ref": "#/$defs/sources"
     },
-    "variables": {
-      "$ref": "#/$defs/variables_v1"
-    }
+    "variables": {}
   },
   "allOf": [
     {

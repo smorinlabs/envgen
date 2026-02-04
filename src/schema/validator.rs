@@ -267,6 +267,11 @@ mod tests {
     use super::*;
     use crate::schema::parser::parse_schema;
 
+    fn errors_for(yaml: &str) -> Vec<String> {
+        let schema = parse_schema(yaml).unwrap();
+        validate_schema(&schema)
+    }
+
     #[test]
     fn test_valid_schema() {
         let yaml = r#"
@@ -295,6 +300,173 @@ variables:
         let schema = parse_schema(yaml).unwrap();
         let errors = validate_schema(&schema);
         assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
+    }
+
+    #[test]
+    fn test_v2_resolver_environments_overlap() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+    staging: ".env.staging"
+environments:
+  local: {}
+  staging: {}
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    sensitive: false
+    resolvers:
+      - environments: [local, staging]
+        source: static
+        values:
+          local: "a"
+          staging: "b"
+      - environments: [staging]
+        source: static
+        values:
+          staging: "c"
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("resolver environments overlap")),
+            "Expected overlap error, got: {:?}",
+            errors
+        );
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("FOO") && e.contains("staging")),
+            "Expected overlap to mention FOO/staging, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_v2_missing_resolver_coverage_for_environment() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+    production: ".env.production"
+environments:
+  local: {}
+  production: {}
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "a"
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("no resolver provided") && e.contains("production")),
+            "Expected missing resolver coverage for production, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_v2_cannot_set_source_and_resolvers() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local: {}
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    source: static
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "a"
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors.iter().any(|e| e.contains("cannot set both")
+                && e.contains("\"source\"")
+                && e.contains("\"resolvers\"")),
+            "Expected source+resolvers conflict error, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_v2_static_resolver_requires_values() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local: {}
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    resolvers:
+      - environments: [local]
+        source: static
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("resolver source is \"static\"") && e.contains("values map")),
+            "Expected missing values map error for static resolver, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_v2_resolver_command_template_unresolved_placeholders() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local:
+    project: "test"
+sources:
+  my-source:
+    command: "echo {missing}"
+variables:
+  FOO:
+    description: "A variable"
+    resolvers:
+      - environments: [local]
+        source: my-source
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors
+                .iter()
+                .any(|e| e.contains("{missing}") && e.contains("local")),
+            "Expected unresolved placeholder error for {{missing}}/local, got: {:?}",
+            errors
+        );
     }
 
     #[test]

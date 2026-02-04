@@ -49,6 +49,22 @@ fn test_init_output_file() {
 }
 
 #[test]
+fn test_init_creates_parent_directories() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join("configs/nested/env.dev.yaml");
+
+    envgen()
+        .arg("init")
+        .arg("--output")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .success();
+
+    let content = fs::read_to_string(output_path).unwrap();
+    assert_eq!(content, fixture_content());
+}
+
+#[test]
 fn test_init_output_directory() {
     let tmp = TempDir::new().unwrap();
     let output_dir = tmp.path().join("configs");

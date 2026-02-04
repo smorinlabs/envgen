@@ -4,18 +4,17 @@ use std::path::PathBuf;
 
 use crate::output;
 use crate::resolver::{command_source, manual_source, static_source};
-use crate::schema::parser::parse_schema_file;
-use crate::schema::validator::validate_schema;
+use crate::schema::validation::{load_and_validate_schema_file, SchemaValidation};
 
 pub struct PullOptions {
     pub schema_path: PathBuf,
     pub env_name: String,
     pub dry_run: bool,
-    pub unmask: bool,
+    pub show_secrets: bool,
     pub force: bool,
-    pub non_interactive: bool,
-    pub output_path: Option<PathBuf>,
-    pub timeout: u64,
+    pub interactive: bool,
+    pub destination_path: Option<PathBuf>,
+    pub source_timeout: u64,
 }
 
 /// A resolved variable result.
@@ -28,15 +27,16 @@ enum ResolveResult {
 /// Run the `pull` command: resolve variables and write the .env file.
 pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     // Parse and validate schema
-    let schema = parse_schema_file(&opts.schema_path)?;
-    let errors = validate_schema(&schema);
-    if !errors.is_empty() {
-        println!("{} Schema errors:", "✗".red());
-        for error in &errors {
-            println!("  - {}", error);
+    let schema = match load_and_validate_schema_file(&opts.schema_path)? {
+        SchemaValidation::Valid(schema) => schema,
+        SchemaValidation::Invalid(errors) => {
+            println!("{} Schema errors:", "✗".red());
+            for error in &errors {
+                println!("  - {}", error);
+            }
+            bail!("Schema validation failed. Fix errors before pulling.");
         }
-        bail!("Schema validation failed. Fix errors before pulling.");
-    }
+    };
 
     // Validate environment
     if !schema.environments.contains_key(&opts.env_name) {
@@ -51,8 +51,25 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     let env_config = schema.environments.get(&opts.env_name).unwrap();
 
     // Determine destination path
-    let dest_path = if let Some(ref output) = opts.output_path {
-        output.clone()
+    let dest_path = if let Some(ref destination) = opts.destination_path {
+        if destination.exists() && destination.is_dir() {
+            let schema_dest = match schema.destination_for(&opts.env_name) {
+                Some(p) => PathBuf::from(p),
+                None => bail!(
+                    "No destination defined for environment \"{}\" in metadata.destination.",
+                    opts.env_name
+                ),
+            };
+            let file_name = schema_dest.file_name().ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Schema destination path \"{}\" does not have a file name.",
+                    schema_dest.display()
+                )
+            })?;
+            destination.join(file_name)
+        } else {
+            destination.clone()
+        }
     } else {
         match schema.destination_for(&opts.env_name) {
             Some(p) => PathBuf::from(p),
@@ -62,6 +79,21 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
             ),
         }
     };
+
+    if dest_path.exists() && dest_path.is_dir() {
+        bail!(
+            "Destination path \"{}\" is a directory. Provide a file path.",
+            dest_path.display()
+        );
+    }
+
+    // Refuse to overwrite an existing destination without --force (even in dry-run).
+    if dest_path.exists() && !opts.force {
+        bail!(
+            "Destination file \"{}\" already exists. Use --force to overwrite.",
+            dest_path.display()
+        );
+    }
 
     // Dry run header
     if opts.dry_run {
@@ -107,8 +139,8 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                         env_config,
                     ) {
                         Ok(v) => {
-                            if var.sensitive && !opts.unmask {
-                                output::mask_value(&v, false)
+                            if var.sensitive {
+                                output::mask_value(&v, opts.show_secrets)
                             } else {
                                 v
                             }
@@ -124,7 +156,11 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
             } else if source == "manual" {
                 static_manual_count += 1;
                 println!("  {}", var_name);
-                println!("    source:  manual (interactive prompt)");
+                if opts.interactive {
+                    println!("    source:  manual (interactive prompt)");
+                } else {
+                    println!("    source:  manual (skipped; use --interactive to prompt)");
+                }
                 if let Some(instructions) = &var.source_instructions {
                     println!("    instructions: {}", instructions.trim());
                 }
@@ -165,14 +201,6 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
         return Ok(true);
     }
 
-    // Check if destination exists (non dry-run)
-    if dest_path.exists() && !opts.force {
-        bail!(
-            "Destination file \"{}\" already exists. Use --force to overwrite.",
-            dest_path.display()
-        );
-    }
-
     // Count applicable variables
     let applicable_vars: Vec<(&String, &crate::schema::types::Variable)> = schema
         .variables
@@ -190,7 +218,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     // Collect commands to run in parallel
     let mut command_tasks: Vec<(String, String, String, bool)> = Vec::new(); // (var_name, source_name, command, required)
     let mut static_results: Vec<ResolveResult> = Vec::new();
-    let mut manual_vars: Vec<(String, String, Option<String>, bool)> = Vec::new(); // (var_name, description, instructions, required)
+    let mut manual_vars: Vec<(String, String, String, Option<String>, bool, bool)> = Vec::new(); // (var_name, key, description, instructions, required, sensitive)
 
     for (var_name, var) in &applicable_vars {
         let source = match var.effective_source_for_env(&opts.env_name) {
@@ -227,11 +255,14 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                 }
             }
         } else if source == "manual" {
+            let key = var.effective_key_for_env(var_name, &opts.env_name);
             manual_vars.push((
                 var_name.to_string(),
+                key,
                 var.description.clone(),
                 var.source_instructions.clone(),
                 var.required,
+                var.sensitive,
             ));
         } else if let Some(src) = schema.sources.get(source) {
             let key = var.effective_key_for_env(var_name, &opts.env_name);
@@ -260,7 +291,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     // Execute all command tasks in parallel
     let mut handles = Vec::new();
     for (var_name, _source_name, cmd, required) in command_tasks {
-        let timeout = opts.timeout;
+        let timeout = opts.source_timeout;
         handles.push(tokio::spawn(async move {
             match command_source::execute_command(&cmd, timeout).await {
                 Ok(result) => ResolveResult::Success(var_name, result.value),
@@ -284,15 +315,17 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     }
 
     // Handle manual prompts (must be sequential)
-    for (var_name, description, instructions, required) in manual_vars {
-        match manual_source::resolve_manual(
-            &var_name,
-            &description,
-            instructions.as_deref(),
-            &opts.env_name,
+    for (var_name, key, description, instructions, required, sensitive) in manual_vars {
+        match manual_source::resolve_manual(manual_source::ManualResolveOptions {
+            var_name: &var_name,
+            key: &key,
+            description: &description,
+            source_instructions: instructions.as_deref(),
+            env_name: &opts.env_name,
             env_config,
-            opts.non_interactive,
-        ) {
+            sensitive,
+            non_interactive: !opts.interactive,
+        }) {
             Ok(Some(value)) => {
                 all_results.push(ResolveResult::Success(var_name, value));
             }
@@ -300,7 +333,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                 // Skipped in non-interactive mode
                 all_results.push(ResolveResult::Skipped(
                     var_name,
-                    "skipped in non-interactive mode".to_string(),
+                    "skipped (non-interactive mode)".to_string(),
                 ));
             }
             Err(e) => {

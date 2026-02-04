@@ -15,10 +15,6 @@ use std::process;
     about = "Generate .env files from declarative YAML schemas"
 )]
 struct Cli {
-    /// Path to schema YAML file
-    #[arg(short, long, global = true)]
-    schema: Option<PathBuf>,
-
     #[command(subcommand)]
     command: Commands,
 }
@@ -27,11 +23,11 @@ struct Cli {
 enum Commands {
     /// Resolve all variables and write the destination .env file
     Pull {
-        /// Path to schema YAML file
-        #[arg(short, long)]
-        schema: Option<PathBuf>,
+        /// Path to envgen YAML config file
+        #[arg(short = 'c', long)]
+        config: PathBuf,
 
-        /// Target environment (defaults to "local")
+        /// Target environment
         #[arg(short, long, default_value = "local")]
         env: String,
 
@@ -40,24 +36,24 @@ enum Commands {
         dry_run: bool,
 
         /// Show actual sensitive values in dry-run output
-        #[arg(long)]
-        unmask: bool,
+        #[arg(long, requires = "dry_run")]
+        show_secrets: bool,
 
         /// Overwrite the destination file if it already exists
         #[arg(short, long)]
         force: bool,
 
-        /// Skip manual source variables instead of prompting
-        #[arg(long)]
-        non_interactive: bool,
+        /// Prompt for manual source variables instead of skipping them
+        #[arg(short, long)]
+        interactive: bool,
 
         /// Override the destination path from the schema
-        #[arg(short, long)]
-        output: Option<PathBuf>,
+        #[arg(short = 'd', long)]
+        destination: Option<PathBuf>,
 
-        /// Timeout in seconds for source commands (default: 30)
+        /// Timeout in seconds for each source command
         #[arg(long, default_value = "30")]
-        timeout: u64,
+        source_timeout: u64,
     },
 
     /// Create a sample schema file
@@ -77,24 +73,35 @@ enum Commands {
 
     /// Validate a schema file for correctness
     Check {
-        /// Path to schema YAML file
-        #[arg(short, long)]
-        schema: Option<PathBuf>,
+        /// Path to envgen YAML config file
+        #[arg(short = 'c', long)]
+        config: PathBuf,
     },
 
     /// Display a table of all variables defined in the schema
     List {
-        /// Path to schema YAML file
-        #[arg(short, long)]
-        schema: Option<PathBuf>,
+        /// Path to envgen YAML config file
+        #[arg(short = 'c', long)]
+        config: PathBuf,
 
         /// Filter to variables applicable to a specific environment
         #[arg(short, long)]
         env: Option<String>,
 
-        /// Output format: table (default) or json
+        /// Output format: table or json
         #[arg(long, default_value = "table")]
         format: String,
+    },
+
+    /// Generate Markdown documentation for a schema file
+    Docs {
+        /// Path to envgen YAML config file
+        #[arg(short = 'c', long)]
+        config: PathBuf,
+
+        /// Filter to variables applicable to a specific environment
+        #[arg(short, long)]
+        env: Option<String>,
     },
 
     /// Export the embedded JSON Schema used to validate envgen YAML schemas
@@ -102,10 +109,6 @@ enum Commands {
         /// Output path (file or directory)
         #[arg(short, long)]
         output: Option<PathBuf>,
-
-        /// Print to stdout instead of writing a file
-        #[arg(long)]
-        stdout: bool,
 
         /// Overwrite the destination file if it already exists
         #[arg(short, long)]
@@ -115,14 +118,6 @@ enum Commands {
         #[arg(short, long)]
         quiet: bool,
     },
-}
-
-fn resolve_schema_path(global: &Option<PathBuf>, local: &Option<PathBuf>) -> PathBuf {
-    // Local (subcommand) flag takes precedence over global
-    local.clone().or_else(|| global.clone()).unwrap_or_else(|| {
-        eprintln!("Error: --schema is required. Specify the path to a YAML schema file.");
-        process::exit(1);
-    })
 }
 
 #[tokio::main]
@@ -148,23 +143,19 @@ async fn main() {
                 }
             }
         }
-        Commands::Check { ref schema } => {
-            let schema_path = resolve_schema_path(&cli.schema, schema);
-            match commands::check::run_check(&schema_path) {
-                Ok(true) => 0,
-                Ok(false) => 1,
-                Err(e) => {
-                    eprintln!("Error: {:#}", e);
-                    1
-                }
+        Commands::Check { ref config } => match commands::check::run_check(config) {
+            Ok(true) => 0,
+            Ok(false) => 1,
+            Err(e) => {
+                eprintln!("Error: {:#}", e);
+                1
             }
-        }
+        },
         Commands::List {
-            ref schema,
+            ref config,
             ref env,
             ref format,
         } => {
-            let schema_path = resolve_schema_path(&cli.schema, schema);
             let fmt = match commands::list::ListFormat::from_str(format) {
                 Ok(f) => f,
                 Err(e) => {
@@ -172,7 +163,7 @@ async fn main() {
                     process::exit(1);
                 }
             };
-            match commands::list::run_list(&schema_path, env.as_deref(), fmt) {
+            match commands::list::run_list(config, env.as_deref(), fmt) {
                 Ok(()) => 0,
                 Err(e) => {
                     eprintln!("Error: {:#}", e);
@@ -180,26 +171,35 @@ async fn main() {
                 }
             }
         }
+        Commands::Docs {
+            ref config,
+            ref env,
+        } => match commands::docs::run_docs(config, env.as_deref()) {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("Error: {:#}", e);
+                1
+            }
+        },
         Commands::Pull {
-            ref schema,
+            ref config,
             ref env,
             dry_run,
-            unmask,
+            show_secrets,
             force,
-            non_interactive,
-            ref output,
-            timeout,
+            interactive,
+            ref destination,
+            source_timeout,
         } => {
-            let schema_path = resolve_schema_path(&cli.schema, schema);
             let opts = commands::pull::PullOptions {
-                schema_path,
+                schema_path: config.clone(),
                 env_name: env.clone(),
                 dry_run,
-                unmask,
+                show_secrets,
                 force,
-                non_interactive,
-                output_path: output.clone(),
-                timeout,
+                interactive,
+                destination_path: destination.clone(),
+                source_timeout,
             };
             match commands::pull::run_pull(opts).await {
                 Ok(true) => 0,
@@ -212,11 +212,10 @@ async fn main() {
         }
         Commands::Schema {
             ref output,
-            stdout,
             force,
             quiet,
         } => {
-            if stdout {
+            if output.as_deref() == Some(PathBuf::from("-").as_ref()) {
                 match commands::schema::run_schema_print() {
                     Ok(()) => 0,
                     Err(e) => {

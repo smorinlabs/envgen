@@ -1,8 +1,9 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
+use colored::Colorize;
 use std::path::Path;
 
 use crate::output;
-use crate::schema::parser::parse_schema_file;
+use crate::schema::validation::{load_and_validate_schema_file, SchemaValidation};
 
 /// Output format for the list command.
 pub enum ListFormat {
@@ -22,13 +23,22 @@ impl ListFormat {
 
 /// Run the `list` command: display variables defined in the schema.
 pub fn run_list(schema_path: &Path, env_filter: Option<&str>, format: ListFormat) -> Result<()> {
-    let schema = parse_schema_file(schema_path)?;
+    let schema = match load_and_validate_schema_file(schema_path)? {
+        SchemaValidation::Valid(schema) => schema,
+        SchemaValidation::Invalid(errors) => {
+            println!("{} Schema errors:", "✗".red());
+            for error in &errors {
+                println!("  - {}", error);
+            }
+            bail!("Schema validation failed. Fix errors before listing.");
+        }
+    };
 
     // Validate env filter if provided
     if let Some(env) = env_filter {
         if !schema.environments.contains_key(env) {
             let available: Vec<String> = schema.environment_names();
-            anyhow::bail!(
+            bail!(
                 "Environment \"{}\" not found. Available: {}",
                 env,
                 available.join(", ")

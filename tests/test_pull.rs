@@ -12,7 +12,7 @@ fn envgen() -> Command {
 fn test_pull_dry_run() {
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("local")
@@ -32,12 +32,11 @@ fn test_pull_writes_env_file() {
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("local")
-        .arg("--non-interactive")
-        .arg("-o")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .success()
@@ -63,12 +62,31 @@ fn test_pull_refuses_overwrite_without_force() {
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("local")
-        .arg("--non-interactive")
-        .arg("-o")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("already exists"));
+}
+
+#[test]
+fn test_pull_dry_run_refuses_overwrite_without_force() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+    fs::write(&output_path, "existing content").unwrap();
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/valid_frontend.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--dry-run")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .failure()
@@ -83,13 +101,12 @@ fn test_pull_force_overwrites() {
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("local")
-        .arg("--non-interactive")
         .arg("--force")
-        .arg("-o")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .success()
@@ -103,7 +120,7 @@ fn test_pull_force_overwrites() {
 fn test_pull_invalid_environment() {
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("nonexistent")
@@ -120,12 +137,11 @@ fn test_pull_production_env() {
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_frontend.yaml")
         .arg("-e")
         .arg("production")
-        .arg("--non-interactive")
-        .arg("-o")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .success();
@@ -144,12 +160,11 @@ fn test_pull_backend_with_echo_source() {
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/valid_backend.yaml")
         .arg("-e")
         .arg("local")
-        .arg("--non-interactive")
-        .arg("-o")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .success();
@@ -164,18 +179,17 @@ fn test_pull_backend_with_echo_source() {
 }
 
 #[test]
-fn test_pull_non_interactive_skips_manual() {
+fn test_pull_default_skips_manual() {
     let tmp = TempDir::new().unwrap();
     let output_path = tmp.path().join(".env");
 
     envgen()
         .arg("pull")
-        .arg("-s")
+        .arg("-c")
         .arg("tests/fixtures/manual_schema.yaml")
         .arg("-e")
         .arg("local")
-        .arg("--non-interactive")
-        .arg("-o")
+        .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
         .success()
@@ -186,4 +200,108 @@ fn test_pull_non_interactive_skips_manual() {
     assert!(content.contains("STATIC_VAR=static-value"));
     // Manual var should be skipped
     assert!(!content.contains("MANUAL_VAR"));
+}
+
+#[test]
+fn test_pull_invalid_schema_fails_before_execution() {
+    let tmp = TempDir::new().unwrap();
+    let side_effect_path = tmp.path().join("side_effect.txt");
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/invalid_schema_with_side_effect.yaml")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .env("SIDE_EFFECT", side_effect_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Schema validation failed"));
+
+    assert!(
+        !side_effect_path.exists(),
+        "side effect command should not run"
+    );
+    assert!(!output_path.exists(), "output file should not be written");
+}
+
+#[test]
+fn test_pull_missing_destination_for_environment() {
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/missing_destination.yaml")
+        .arg("-e")
+        .arg("staging")
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "No destination defined for environment",
+        ));
+}
+
+#[test]
+fn test_pull_required_command_failure_exits_1() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/required_failing_command.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Exit code: 1"));
+
+    assert!(!output_path.exists(), "output file should not be written");
+}
+
+#[test]
+fn test_pull_optional_command_failure_exits_0_with_warning() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/optional_failing_command.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("warning"))
+        .stdout(predicate::str::contains("FAIL_OPTIONAL"));
+
+    let content = fs::read_to_string(&output_path).unwrap();
+    assert!(content.contains("OK_STATIC=ok"));
+    assert!(!content.contains("FAIL_OPTIONAL="));
+}
+
+#[test]
+fn test_pull_no_vars_resolved_does_not_write_file() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/manual_only_schema.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "No variables resolved. Output file not written.",
+        ));
+
+    assert!(!output_path.exists(), "output file should not be written");
 }

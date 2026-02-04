@@ -1,0 +1,19 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema with only manual variables"
+  destination:
+    local: ".env"
+
+environments:
+  local:
+    project: "test-project"
+
+sources: {}
+
+variables:
+  MANUAL_ONLY:
+    description: "A manually entered variable"
+    sensitive: false
+    source: manual
+    source_instructions: "Get this from the dashboard at https://example.com/project/{project}"

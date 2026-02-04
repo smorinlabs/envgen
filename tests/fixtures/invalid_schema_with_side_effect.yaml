@@ -1,0 +1,24 @@
+schema_version: "1"
+
+metadata:
+  description: "Invalid schema that would run a command if executed"
+  destination:
+    local: ".env"
+
+environments:
+  local:
+    project: "test"
+
+sources:
+  side-effect:
+    command: "echo hi > $SIDE_EFFECT"
+
+variables:
+  BAD_VAR:
+    description: "References undefined source"
+    source: nonexistent-source
+
+  SIDE_EFFECT_VAR:
+    description: "Would create a file if executed"
+    sensitive: false
+    source: side-effect

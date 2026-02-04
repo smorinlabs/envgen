@@ -4,7 +4,7 @@
 # 1. Update metadata.destination to match where you want env files written.
 # 2. Fill in environments.* values (used by {placeholders} in command sources).
 # 3. Add sources and variables for your project.
-# 4. Run: envgen pull --schema env.dev.yaml --env dev
+# 4. Run: envgen pull --config env.dev.yaml --env dev --interactive
 #
 # This file includes inline comments explaining common fields. Remove or edit them as you like.
 

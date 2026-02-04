@@ -1,0 +1,21 @@
+schema_version: "1"
+
+metadata:
+  description: "Schema missing metadata.destination for staging"
+  destination:
+    local: ".env.local"
+
+environments:
+  local: {}
+  staging: {}
+
+sources: {}
+
+variables:
+  FOO:
+    description: "Static var"
+    sensitive: false
+    source: static
+    values:
+      local: "a"
+      staging: "b"

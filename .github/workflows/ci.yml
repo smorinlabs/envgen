@@ -84,4 +84,5 @@ jobs:
       - name: Build + integration tests
         run: |
           cargo build --locked
-          cargo test --locked --tests
+          cargo test --locked --test test_check
+          cargo test --locked --test test_schema

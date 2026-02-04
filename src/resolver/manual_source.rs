@@ -1,40 +1,47 @@
 use anyhow::Result;
-use dialoguer::Input;
-use std::collections::HashMap;
+use dialoguer::{Input, Password};
+use std::collections::{BTreeMap, HashMap};
 
 use crate::template;
 
+pub struct ManualResolveOptions<'a> {
+    pub var_name: &'a str,
+    pub key: &'a str,
+    pub description: &'a str,
+    pub source_instructions: Option<&'a str>,
+    pub env_name: &'a str,
+    pub env_config: &'a BTreeMap<String, String>,
+    pub sensitive: bool,
+    pub non_interactive: bool,
+}
+
 /// Prompt the user for a manual variable value.
 /// Returns None if non-interactive mode is enabled.
-pub fn resolve_manual(
-    var_name: &str,
-    description: &str,
-    source_instructions: Option<&str>,
-    env_name: &str,
-    env_config: &std::collections::BTreeMap<String, String>,
-    non_interactive: bool,
-) -> Result<Option<String>> {
-    if non_interactive {
+pub fn resolve_manual(opts: ManualResolveOptions<'_>) -> Result<Option<String>> {
+    if opts.non_interactive {
         return Ok(None);
     }
 
     // Build context for expanding template placeholders in instructions
-    let ctx = template::build_context(env_name, env_config, var_name);
+    let ctx = template::build_context(opts.env_name, opts.env_config, opts.key);
 
     println!();
-    println!("  Variable: {}", var_name);
-    println!("  Description: {}", description);
+    println!("  Variable: {}", opts.var_name);
+    println!("  Description: {}", opts.description);
 
-    if let Some(instructions) = source_instructions {
+    if let Some(instructions) = opts.source_instructions {
         let expanded = expand_instructions(instructions, &ctx);
         println!("  Instructions: {}", expanded.trim());
     }
 
     println!();
 
-    let value: String = Input::new()
-        .with_prompt(format!("  Enter value for {}", var_name))
-        .interact_text()?;
+    let prompt = format!("  Enter value for {}", opts.var_name);
+    let value: String = if opts.sensitive {
+        Password::new().with_prompt(prompt).interact()?
+    } else {
+        Input::new().with_prompt(prompt).interact_text()?
+    };
 
     Ok(Some(value))
 }

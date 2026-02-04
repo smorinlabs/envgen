@@ -18,32 +18,61 @@ Generate `.env` files from a declarative YAML schema.
 `envgen init` writes a commented sample schema (`env.dev.yaml`). Here’s what it looks like to use:
 
 ```bash
-envgen list -s env.dev.yaml
+envgen list -c env.dev.yaml
 ```
 
 ```text
+Schema: env.dev.yaml (Sample envgen schema. Replace with your project description.)
+
 +-----------+-----------------------+--------------+
 | Name      | Environments          | Source       |
 +==================================================+
 | API_TOKEN | dev, local, prod, stg | manual       |
+|-----------+-----------------------+--------------|
 | APP_NAME  | dev, local, prod, stg | static       |
+|-----------+-----------------------+--------------|
 | BUILD_ID  | local, dev, stg, prod | command_name |
 +-----------+-----------------------+--------------+
+
+3 variables across 4 environments
 ```
 
 Preview what would happen before writing anything:
 
 ```bash
-envgen pull -s env.dev.yaml -e dev --dry-run
+envgen pull -c env.dev.yaml -e dev --dry-run --interactive
 ```
 
 ```text
+Schema:      env.dev.yaml
+Environment: dev
+Destination: .env.dev (does not exist)
+
+Variables to resolve:
+
+  API_TOKEN
+    source:  manual (interactive prompt)
+    instructions: Create a token in your admin UI and paste it here.
+
+  APP_NAME
+    source:  static
+    value:   Envgen Dev
+
   BUILD_ID
     source:  command_name
     command: bash -lc 'echo envgen-demo-dev-BUILD_ID-$(date +%Y%m%d%H%M%S)'
+
+3 variables would be written to .env.dev
+1 command would be executed (2 static/manual)
 ```
 
 ## Install
+
+### Homebrew (homebrew-core)
+
+```bash
+brew install envgen
+```
 
 ### Cargo
 
@@ -57,7 +86,7 @@ cargo install --git https://github.com/smorinlabs/envgen --locked
 
 ### Prebuilt binaries
 
-Download the appropriate archive from GitHub Releases and place `envgen` on your `PATH`.
+Download the appropriate archive from [GitHub Releases](https://github.com/smorinlabs/envgen/releases) and place `envgen` on your `PATH`.
 
 ### From source
 
@@ -78,22 +107,35 @@ envgen init
 Validate it:
 
 ```bash
-envgen check -s env.dev.yaml
+envgen check -c env.dev.yaml
 ```
 
 Generate a `.env` file (preview first, then write):
 
 ```bash
-envgen pull -s env.dev.yaml -e dev --dry-run
-envgen pull -s env.dev.yaml -e dev --force
-# prompts for any `source: manual` variables
+envgen pull -c env.dev.yaml -e dev --dry-run --interactive
+envgen pull -c env.dev.yaml -e dev --interactive --force
+# prompts for any `source: manual` variables when `--interactive` is set
 ```
 
 List variables:
 
 ```bash
-envgen list -s env.dev.yaml
+envgen list -c env.dev.yaml
 ```
+
+## Command summary
+
+- `envgen init`: write a sample schema
+- `envgen check`: validate a schema file
+- `envgen list`: show variables (table by default; `--format json` is available)
+- `envgen pull`: resolve variables and write the destination `.env` file
+- `envgen schema`: export the embedded JSON Schema used for structural validation and editor autocomplete
+
+Useful flags:
+
+- `pull`: `--dry-run`, `--force`, `--destination`, `--source-timeout`, `--interactive`, `--show-secrets`
+- `list`: `--env`, `--format`
 
 ## Schema format (YAML)
 
@@ -161,24 +203,25 @@ variables:
 
 ## JSON Schema (editor validation)
 
-Export the embedded JSON Schema (for YAML Language Server, CI, etc.):
+Export the embedded JSON Schema (for YAML Language Server, CI, etc.). This is also the schema `envgen`
+uses for **structural** validation; `envgen check` adds **semantic** validation on top.
 
 ```bash
-envgen schema -o schemas/
-# writes ./schemas/envgen.schema.vX.Y.Z.json
+envgen schema
+# writes ./envgen.schema.vX.Y.Z.json
 ```
 
 Point the YAML Language Server at it (top of your schema file):
 
 ```yaml
-# yaml-language-server: $schema=./schemas/envgen.schema.vX.Y.Z.json
+# yaml-language-server: $schema=./envgen.schema.vX.Y.Z.json
 ```
 
 ## Safety notes
 
 - **Command sources are executed via `sh -c`**. Treat schemas as code; don’t run untrusted schemas.
 - `envgen pull` refuses to overwrite existing files unless you pass `--force`.
-- `--dry-run` masks `sensitive: true` values unless you pass `--unmask`.
+- `--dry-run` masks `sensitive: true` values unless you pass `--show-secrets`.
 
 ## Development
 
