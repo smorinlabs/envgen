@@ -235,6 +235,37 @@ list-backend: ## List all backend variables
 .PHONY: list-all
 list-all: list-frontend list-backend ## List all variables from all schemas
 
+# ─── Commit Message ──────────────────────────────────────────────
+
+CLAUDE ?= claude
+
+.PHONY: commit-message
+commit-message: ## Generate a conventional commit message for staged/changed files
+	@if [ -z "$$(git diff --cached --name-only)" ] && [ -z "$$(git diff --name-only)" ]; then \
+		echo "No staged or changed files found."; \
+		exit 1; \
+	fi
+	@{ \
+		echo "=== Staged files ==="; \
+		git diff --cached --stat 2>/dev/null; \
+		echo ""; \
+		echo "=== Staged diff ==="; \
+		git diff --cached 2>/dev/null; \
+		echo ""; \
+		echo "=== Unstaged changes ==="; \
+		git diff --stat 2>/dev/null; \
+		echo ""; \
+		echo "=== Unstaged diff ==="; \
+		git diff 2>/dev/null; \
+	} | $(CLAUDE) -p \
+		"Based on the git diff provided via stdin, write a single conventional commit message. \
+		Use the Conventional Commits format: type(scope): description. \
+		Valid types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert. \
+		Include a scope when it is clear from the changes. \
+		The subject line must be lowercase, imperative mood, no period at the end, max 72 chars. \
+		If the changes are substantial, add a blank line followed by a short body (max 3 bullet points). \
+		Output ONLY the commit message, nothing else — no markdown fences, no explanation."
+
 # ─── Help ───────────────────────────────────────────────────────
 
 .PHONY: help
