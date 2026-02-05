@@ -20,9 +20,24 @@ pub fn load_and_validate_schema_file(path: &Path) -> Result<SchemaValidation> {
     let instance_json: serde_json::Value = serde_json::to_value(&yaml_value)
         .context("Failed to convert schema YAML to JSON for validation")?;
 
+    if let Some(version) = instance_json.get("schema_version").and_then(|v| v.as_str()) {
+        if version != "2" {
+            return Ok(SchemaValidation::Invalid(vec![format!(
+                "{}: Unsupported schema_version: \"{}\". Expected \"2\".",
+                path.display(),
+                version
+            )]));
+        }
+    }
+
     let structural_errors = structural::validate_instance(&instance_json)?;
     if !structural_errors.is_empty() {
-        return Ok(SchemaValidation::Invalid(structural_errors));
+        return Ok(SchemaValidation::Invalid(
+            structural_errors
+                .into_iter()
+                .map(|e| format!("{}: {}", path.display(), e))
+                .collect(),
+        ));
     }
 
     // Re-parse from file for the typed representation. Keeping this in `parser`
@@ -30,7 +45,12 @@ pub fn load_and_validate_schema_file(path: &Path) -> Result<SchemaValidation> {
     let schema = parse_schema_file(path)?;
     let semantic_errors = validate_semantic_schema(&schema);
     if !semantic_errors.is_empty() {
-        return Ok(SchemaValidation::Invalid(semantic_errors));
+        return Ok(SchemaValidation::Invalid(
+            semantic_errors
+                .into_iter()
+                .map(|e| format!("{}: {}", path.display(), e))
+                .collect(),
+        ));
     }
 
     Ok(SchemaValidation::Valid(schema))

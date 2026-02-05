@@ -25,7 +25,7 @@ This PRD covers **authoring the schema YAML** (the “source of truth”), not g
 ## 3. Non-Goals (vNext MVP)
 
 - Editing or deleting existing environments/sources/variables/env keys.
-- Supporting `schema_version: "1"` schemas.
+- Supporting schema versions other than `"2"`.
 - Supporting schema versions beyond `"2"` until the codebase and JSON Schema recognize them.
 - Reformatting/canonicalizing the entire file (this would break comment preservation).
 - Validating resolved secret *values* (regex/enum checks on final `.env` contents).
@@ -44,7 +44,7 @@ This PRD covers **authoring the schema YAML** (the “source of truth”), not g
 
 ### 5.1 Version constraint
 
-- Interactive mode requires `schema_version: "2"`. If the file is `"1"`, error with guidance (“Interactive mode supports v2 only.”).
+- Interactive mode requires `schema_version: "2"`. If the file is not `"2"`, error with guidance (“Interactive mode supports v2 only.”).
 
 ### 5.2 Naming constraints
 

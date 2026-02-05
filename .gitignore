@@ -3,3 +3,4 @@
 .envtool-cache
 .uv-cache
 .uv-tools
+.DS_Store

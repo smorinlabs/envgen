@@ -17,7 +17,7 @@ fn test_list_table_output() {
         .stdout(predicate::str::contains("VITE_ENV"))
         .stdout(predicate::str::contains("VITE_BASE_URL"))
         .stdout(predicate::str::contains("VITE_API_KEY"))
-        .stdout(predicate::str::contains("5 variables"));
+        .stdout(predicate::str::contains("6 variables"));
 }
 
 #[test]

@@ -1,0 +1,19 @@
+schema_version: "2"
+
+metadata:
+  description: "Schema with a static template that cannot be resolved"
+  destination:
+    local: ".env"
+
+environments:
+  local: {}
+
+sources: {}
+
+variables:
+  BROKEN_STATIC:
+    description: "Static value with an unresolved placeholder"
+    sensitive: false
+    source: static
+    values:
+      local: "{project}-db"

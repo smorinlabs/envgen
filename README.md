@@ -147,10 +147,12 @@ envgen docs -c env.dev.yaml
 - `envgen docs`: generate Markdown documentation for a schema
 - `envgen pull`: resolve variables and write the destination `.env` file
 - `envgen schema`: export the embedded JSON Schema used for structural validation and editor autocomplete
+- `envgen readme`: print the embedded README.md to stdout
 
 Useful flags:
 
 - `pull`: `--dry-run`, `--force`, `--destination`, `--source-timeout`, `--interactive`, `--show-secrets`
+- `pull --source-timeout <seconds>`: hard timeout per source command; timed-out commands are terminated
 - `list`: `--env`, `--format`
 
 ## Schema format (YAML)
@@ -161,10 +163,14 @@ At a high level:
 - `sources`: defines named shell command templates to fetch values
 - `variables`: defines each variable’s description, sensitivity, applicability, and source
 
-Supported schema versions:
+Optional documentation fields:
 
-- `"1"`: one `source` per variable
-- `"2"`: adds per-environment `resolvers`
+- `sources.*`: `label`, `url`, `description`
+- `variables.*.resolvers[]`: `label`, `url`, `description`
+
+Supported schema version:
+
+- `"2"`: one `source` per variable, plus optional per-environment `resolvers`
 
 Placeholders available in templates:
 
@@ -194,6 +200,8 @@ environments:
 sources:
   gcloud:
     command: "gcloud secrets versions access latest --secret={key} --project={firebase_project}"
+    label: "Google Cloud Secret Manager"
+    url: "https://console.cloud.google.com/security/secret-manager"
 
 variables:
   VITE_BASE_URL:
@@ -220,8 +228,11 @@ variables:
     resolvers:
       - environments: [local]
         source: manual
+        label: "Local OAuth client"
+        url: "https://console.cloud.google.com/apis/credentials"
       - environments: [production]
         source: gcloud
+        label: "Secret Manager"
 ```
 
 ## JSON Schema (editor validation)

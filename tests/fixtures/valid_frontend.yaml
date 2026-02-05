@@ -21,6 +21,9 @@ environments:
 sources:
   echo-source:
     command: "echo {key}-{environment}"
+    label: "Echo Source"
+    url: "https://example.com/echo"
+    description: "Fixture source for tests."
 
 variables:
   VITE_ENV:
@@ -50,6 +53,16 @@ variables:
       staging: "{firebase_project}"
       production: "{firebase_project}"
 
+  VITE_STATIC_KEY_TEST:
+    description: "Regression: static templates should use source_key for {key}"
+    sensitive: false
+    source: static
+    source_key: MY_SOURCE_KEY
+    values:
+      local: "{key}"
+      staging: "{key}"
+      production: "{key}"
+
   VITE_API_KEY:
     description: "API key fetched from a source"
     sensitive: true
@@ -58,10 +71,16 @@ variables:
     resolvers:
       - environments: [local]
         source: static
+        label: "Local fixture"
+        url: "https://example.com/local"
+        description: "Local test value."
         values:
           local: "API_KEY-local"
       - environments: [staging, production]
         source: echo-source
+        label: "Echo fixture"
+        url: "https://example.com/echo"
+        description: "Echo source for staging/production."
 
   VITE_OPTIONAL_FLAG:
     description: "Optional feature flag"

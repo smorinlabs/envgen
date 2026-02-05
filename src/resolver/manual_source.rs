@@ -65,6 +65,6 @@ pub fn resolve_manual(opts: ManualResolveOptions<'_>) -> Result<Option<String>> 
 }
 
 fn expand_instructions(instructions: &str, ctx: &HashMap<String, String>) -> String {
-    // Best-effort expansion — don't fail if a placeholder can't be resolved
-    template::expand_template(instructions, ctx).unwrap_or_else(|_| instructions.to_string())
+    // Best-effort expansion — leave unresolved placeholders intact (e.g., `{missing}`)
+    template::expand_template_best_effort(instructions, ctx)
 }

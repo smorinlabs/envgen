@@ -37,6 +37,11 @@ sources:
   command_name:
     # Commands can reference {key}, {environment}, and environment config keys like {app_slug}.
     command: "bash -lc 'echo {app_slug}-{environment}-{key}-$(date +%Y%m%d%H%M%S)'"
+  gcloud:
+    command: "gcloud secrets versions access latest --secret={key} --project={app_slug}"
+    label: "Google Cloud Secret Manager"
+    url: "https://console.cloud.google.com/security/secret-manager"
+    description: "Primary secret store for non-local environments."
 
 variables:
   # Each variable needs a description and a source.
@@ -77,3 +82,29 @@ variables:
     description: "Dummy build identifier generated via a command source."
     source: command_name
     environments: [local, dev, stg, prod]
+
+
+  STRIPE_SECRET_KEY:
+    description: >
+      Stripe secret API key. Used for creating charges, managing
+      subscriptions, and all server-side Stripe operations.
+    source: gcloud
+    source_instructions: |
+      Stripe Dashboard > Developers > API Keys > Secret key
+      https://dashboard.stripe.com/apikeys
+      Use sk_test_* for local/staging, sk_live_* for production.
+
+  GOOGLE_CLIENT_ID:
+    description: "Google OAuth client ID used by frontend auth flows."
+    environments: [local, dev, stg, prod]
+    resolvers:
+      - environments: [local, dev]
+        source: manual
+        label: "Local OAuth client"
+        url: "https://console.cloud.google.com/apis/credentials"
+        description: "Create a test OAuth client for local/dev."
+      - environments: [stg, prod]
+        source: gcloud
+        label: "Staging/Prod Secrets"
+        url: "https://console.cloud.google.com/security/secret-manager"
+        description: "Read from Secret Manager for non-local envs."

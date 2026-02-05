@@ -26,6 +26,59 @@ fn test_pull_dry_run() {
 }
 
 #[test]
+fn test_pull_dry_run_does_not_count_non_interactive_manual() {
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/manual_only_schema.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--dry-run")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "No variables would be resolved. Output file would not be written.",
+        ));
+}
+
+#[test]
+fn test_pull_dry_run_schema_validation_error_exits_1() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/broken_static_template.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--dry-run")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Schema errors"))
+        .stderr(predicate::str::contains("Schema validation failed"));
+}
+
+#[test]
+fn test_pull_dry_run_expands_manual_instructions() {
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/manual_schema.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--dry-run")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "https://example.com/project/test-project",
+        ))
+        .stdout(predicate::str::contains("{project}").not());
+}
+
+#[test]
 fn test_pull_writes_env_file() {
     let tmp = TempDir::new().unwrap();
     let output_path = tmp.path().join(".env");
@@ -46,6 +99,7 @@ fn test_pull_writes_env_file() {
     assert!(content.contains("VITE_ENV=staging"));
     assert!(content.contains("VITE_BASE_URL=http://localhost:5173"));
     assert!(content.contains("VITE_PROJECT_ID=my-app-staging"));
+    assert!(content.contains("VITE_STATIC_KEY_TEST=MY_SOURCE_KEY"));
     assert!(content.contains("VITE_OPTIONAL_FLAG=true"));
     // VITE_API_KEY should be resolved via echo command
     assert!(content.contains("VITE_API_KEY=API_KEY-local"));
@@ -304,4 +358,32 @@ fn test_pull_no_vars_resolved_does_not_write_file() {
         ));
 
     assert!(!output_path.exists(), "output file should not be written");
+}
+
+#[test]
+fn test_pull_source_timeout_terminates_command() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+    let side_effect_path = tmp.path().join("side_effect.txt");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/timeout_side_effect.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .arg("--source-timeout")
+        .arg("1")
+        .env("SIDE_EFFECT", side_effect_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("timed out"));
+
+    std::thread::sleep(std::time::Duration::from_secs(3));
+    assert!(
+        !side_effect_path.exists(),
+        "timed-out command should not perform side effects after envgen exits"
+    );
 }

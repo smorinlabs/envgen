@@ -1,0 +1,19 @@
+schema_version: "2"
+
+metadata:
+  description: "Schema with a static value that references a missing template key"
+  destination:
+    local: ".env"
+
+environments:
+  local:
+    present_key: "ok"
+
+sources: {}
+
+variables:
+  BAD_STATIC:
+    description: "Static value contains an unresolved placeholder"
+    source: static
+    values:
+      local: "{missing_key}"

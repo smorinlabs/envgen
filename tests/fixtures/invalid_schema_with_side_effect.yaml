@@ -1,4 +1,4 @@
-schema_version: "1"
+schema_version: "2"
 
 metadata:
   description: "Invalid schema that would run a command if executed"

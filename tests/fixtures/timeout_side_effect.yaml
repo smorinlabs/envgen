@@ -1,0 +1,19 @@
+schema_version: "2"
+
+metadata:
+  description: "Schema with a command that times out and would otherwise perform a delayed side effect"
+  destination:
+    local: ".env"
+
+environments:
+  local: {}
+
+sources:
+  side-effect-timeout:
+    command: '(sleep 2; echo hi > "$SIDE_EFFECT") & sleep 10'
+
+variables:
+  TIMEOUT_REQUIRED:
+    description: "Required variable resolved via a command that should be terminated on timeout"
+    sensitive: false
+    source: side-effect-timeout

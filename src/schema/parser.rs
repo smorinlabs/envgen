@@ -23,7 +23,7 @@ mod tests {
     #[test]
     fn test_parse_minimal_schema() {
         let yaml = r#"
-schema_version: "1"
+schema_version: "2"
 metadata:
   description: "Test schema"
   destination:
@@ -43,7 +43,7 @@ variables:
       local: "hello"
 "#;
         let schema = parse_schema(yaml).unwrap();
-        assert_eq!(schema.schema_version, "1");
+        assert_eq!(schema.schema_version, "2");
         assert_eq!(schema.variables.len(), 1);
         assert!(schema.variables.contains_key("MY_VAR"));
     }

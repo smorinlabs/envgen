@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `envgen readme` subcommand (prints the embedded `README.md` to stdout)
+
 ### Changed
 
 ### Deprecated
 
 ### Removed
 
+- Support for `schema_version: "1"` (schemas must use `"2"`)
+
 ### Fixed
 
-### Security
+- Static `values` templates now expand `{key}` to the variable’s effective `source_key` (consistent with command/manual sources).
 
+### Security

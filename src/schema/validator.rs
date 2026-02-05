@@ -1,22 +1,66 @@
 use super::types::Schema;
 use crate::template;
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
+
+fn unresolved_template_placeholders(
+    template_str: &str,
+    env_config: &std::collections::BTreeMap<String, String>,
+) -> Vec<String> {
+    let mut missing: BTreeSet<String> = BTreeSet::new();
+    for ph in template::extract_placeholders(template_str) {
+        if ph == "key" || ph == "environment" {
+            continue;
+        }
+        if !env_config.contains_key(&ph) {
+            missing.insert(ph);
+        }
+    }
+    missing.into_iter().collect()
+}
+
+fn format_unresolved_template_error(
+    yaml_path: &str,
+    value_kind: &str,
+    env_name: &str,
+    missing: &[String],
+) -> Option<String> {
+    if missing.is_empty() {
+        return None;
+    }
+
+    let placeholders = missing
+        .iter()
+        .map(|k| format!("\"{{{}}}\"", k))
+        .collect::<Vec<String>>()
+        .join(", ");
+    let fix_paths = missing
+        .iter()
+        .map(|k| format!("environments.{}.{}", env_name, k))
+        .collect::<Vec<String>>()
+        .join(", ");
+
+    Some(format!(
+        "{}: {} contains unresolved template placeholder{}: {}. Fix: add {} (or remove the placeholder{}).",
+        yaml_path,
+        value_kind,
+        if missing.len() == 1 { "" } else { "s" },
+        placeholders,
+        fix_paths,
+        if missing.len() == 1 { "" } else { "s" },
+    ))
+}
 
 /// Validate a schema and return a list of errors. Empty list means valid.
 pub fn validate_schema(schema: &Schema) -> Vec<String> {
     let mut errors = Vec::new();
 
     // Check schema_version
-    let schema_v2 = match schema.schema_version.as_str() {
-        "1" => false,
-        "2" => true,
-        _ => true, // keep validating but treat as unsupported
-    };
-    if schema.schema_version != "1" && schema.schema_version != "2" {
+    if schema.schema_version != "2" {
         errors.push(format!(
-            "Unrecognized schema_version: \"{}\". Expected \"1\" or \"2\".",
+            "Unsupported schema_version: \"{}\". Expected \"2\".",
             schema.schema_version
         ));
+        return errors;
     }
 
     // Check metadata.destination has at least one entry
@@ -61,15 +105,6 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
         };
 
         let has_resolvers = var.resolvers.as_ref().is_some_and(|r| !r.is_empty());
-
-        // schema v1 does not support resolvers
-        if !schema_v2 && has_resolvers {
-            errors.push(format!(
-                "{}: resolvers is only supported in schema_version \"2\".",
-                var_name
-            ));
-            continue;
-        }
 
         if has_resolvers {
             if var.source.is_some() {
@@ -145,6 +180,27 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                                         "{}: resolver source is \"static\" but no value provided for environment \"{}\".",
                                         var_name, env
                                     ));
+                                    continue;
+                                }
+
+                                if let Some(env_config) = schema.environments.get(env) {
+                                    let value = values.get(env).unwrap();
+                                    let missing =
+                                        unresolved_template_placeholders(value, env_config);
+                                    let yaml_path = format!(
+                                        "variables.{}.resolvers[{}].values.{}",
+                                        var_name,
+                                        idx + 1,
+                                        env
+                                    );
+                                    if let Some(msg) = format_unresolved_template_error(
+                                        &yaml_path,
+                                        "static resolver value",
+                                        env,
+                                        &missing,
+                                    ) {
+                                        errors.push(msg);
+                                    }
                                 }
                             }
                         }
@@ -186,7 +242,7 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                 }
             }
         } else {
-            // v1-style variables: require a single source
+            // Single-source variables: require a source.
             let source = match var.source.as_deref() {
                 Some(s) => s,
                 None => {
@@ -219,6 +275,22 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                                     "{}: source is \"static\" but no value provided for environment \"{}\".",
                                     var_name, env
                                 ));
+                                continue;
+                            }
+
+                            if let Some(env_config) = schema.environments.get(*env) {
+                                let value = values.get(*env).unwrap();
+                                let missing = unresolved_template_placeholders(value, env_config);
+                                let yaml_path =
+                                    format!("variables.{}.values.{}", var_name, env);
+                                if let Some(msg) = format_unresolved_template_error(
+                                    &yaml_path,
+                                    "static value",
+                                    env,
+                                    &missing,
+                                ) {
+                                    errors.push(msg);
+                                }
                             }
                         }
                     }
@@ -275,7 +347,7 @@ mod tests {
     #[test]
     fn test_valid_schema() {
         let yaml = r#"
-schema_version: "1"
+schema_version: "2"
 metadata:
   description: "Test"
   destination:
@@ -470,9 +542,71 @@ variables:
     }
 
     #[test]
+    fn test_static_value_unresolved_template_placeholders() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local:
+    project: "test"
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    source: static
+    values:
+      local: "{missing_key}"
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors.iter().any(|e| {
+                e.contains("variables.FOO.values.local")
+                    && e.contains("\"{missing_key}\"")
+                    && e.contains("environments.local.missing_key")
+            }),
+            "Expected unresolved placeholder error for static value, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_v2_static_resolver_value_unresolved_template_placeholders() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local:
+    project: "test"
+sources: {}
+variables:
+  FOO:
+    description: "A variable"
+    resolvers:
+      - environments: [local]
+        source: static
+        values:
+          local: "{missing_key}"
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors.iter().any(|e| {
+                e.contains("variables.FOO.resolvers[1].values.local") && e.contains("\"{missing_key}\"")
+            }),
+            "Expected unresolved placeholder error for static resolver value, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
     fn test_undefined_source() {
         let yaml = r#"
-schema_version: "1"
+schema_version: "2"
 metadata:
   description: "Test"
   destination:
@@ -494,7 +628,7 @@ variables:
     #[test]
     fn test_static_without_values() {
         let yaml = r#"
-schema_version: "1"
+schema_version: "2"
 metadata:
   description: "Test"
   destination:
@@ -516,7 +650,7 @@ variables:
     #[test]
     fn test_undefined_environment_in_variable() {
         let yaml = r#"
-schema_version: "1"
+schema_version: "2"
 metadata:
   description: "Test"
   destination:

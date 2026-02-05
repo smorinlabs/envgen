@@ -9,7 +9,7 @@
 	"properties": {
 		"schema_version": {
 			"type": "string",
-			"enum": ["1", "2"]
+			"enum": ["2"]
 		},
 		"metadata": {
 			"$ref": "#/$defs/metadata"
@@ -20,42 +20,10 @@
 		"sources": {
 			"$ref": "#/$defs/sources"
 		},
-		"variables": {}
-	},
-	"allOf": [
-		{
-			"if": {
-				"properties": {
-					"schema_version": {
-						"const": "1"
-					}
-				}
-			},
-			"then": {
-				"properties": {
-					"variables": {
-						"$ref": "#/$defs/variables_v1"
-					}
-				}
-			}
-		},
-		{
-			"if": {
-				"properties": {
-					"schema_version": {
-						"const": "2"
-					}
-				}
-			},
-			"then": {
-				"properties": {
-					"variables": {
-						"$ref": "#/$defs/variables_v2"
-					}
-				}
-			}
+		"variables": {
+			"$ref": "#/$defs/variables_v2"
 		}
-	],
+	},
 	"$defs": {
 		"env_name": {
 			"type": "string",
@@ -122,6 +90,18 @@
 			"required": ["command"],
 			"properties": {
 				"command": {
+					"type": "string",
+					"minLength": 1
+				},
+				"label": {
+					"type": "string",
+					"minLength": 1
+				},
+				"url": {
+					"type": "string",
+					"minLength": 1
+				},
+				"description": {
 					"type": "string",
 					"minLength": 1
 				}
@@ -248,6 +228,18 @@
 					"type": "string",
 					"minLength": 1
 				},
+				"label": {
+					"type": "string",
+					"minLength": 1
+				},
+				"url": {
+					"type": "string",
+					"minLength": 1
+				},
+				"description": {
+					"type": "string",
+					"minLength": 1
+				},
 				"source_key": {
 					"type": "string",
 					"minLength": 1
@@ -278,17 +270,6 @@
 				"$ref": "#/$defs/resolver"
 			}
 		},
-		"variables_v1": {
-			"type": "object",
-			"description": "Map of variable name -> variable definition (schema_version 1).",
-			"minProperties": 1,
-			"propertyNames": {
-				"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
-			},
-			"additionalProperties": {
-				"$ref": "#/$defs/variable_source"
-			}
-		},
 		"variables_v2": {
 			"type": "object",
 			"description": "Map of variable name -> variable definition (schema_version 2).",
@@ -297,14 +278,15 @@
 				"pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
 			},
 			"additionalProperties": {
-				"oneOf": [
-					{
-						"$ref": "#/$defs/variable_source"
-					},
-					{
-						"$ref": "#/$defs/variable_resolvers"
-					}
-				]
+				"if": {
+					"required": ["resolvers"]
+				},
+				"then": {
+					"$ref": "#/$defs/variable_resolvers"
+				},
+				"else": {
+					"$ref": "#/$defs/variable_source"
+				}
 			}
 		}
 	}

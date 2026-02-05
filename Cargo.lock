@@ -377,6 +377,7 @@ dependencies = [
  "comfy-table",
  "dialoguer",
  "jsonschema",
+ "libc",
  "predicates",
  "regex",
  "serde",

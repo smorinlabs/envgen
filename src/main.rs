@@ -51,7 +51,7 @@ enum Commands {
         #[arg(short = 'd', long)]
         destination: Option<PathBuf>,
 
-        /// Timeout in seconds for each source command
+        /// Timeout in seconds for each source command (hard timeout; timed-out commands are terminated)
         #[arg(long, default_value = "30")]
         source_timeout: u64,
     },
@@ -118,6 +118,9 @@ enum Commands {
         #[arg(short, long)]
         quiet: bool,
     },
+
+    /// Print the embedded README.md to stdout
+    Readme,
 }
 
 #[tokio::main]
@@ -238,6 +241,13 @@ async fn main() {
                 }
             }
         }
+        Commands::Readme => match commands::readme::run_readme() {
+            Ok(()) => 0,
+            Err(e) => {
+                eprintln!("Error: {:#}", e);
+                1
+            }
+        },
     };
 
     process::exit(exit_code);

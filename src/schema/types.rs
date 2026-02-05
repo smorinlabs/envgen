@@ -24,6 +24,15 @@ pub struct Metadata {
 #[serde(deny_unknown_fields)]
 pub struct Source {
     pub command: String,
+
+    #[serde(default)]
+    pub label: Option<String>,
+
+    #[serde(default)]
+    pub url: Option<String>,
+
+    #[serde(default)]
+    pub description: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -72,6 +81,15 @@ pub struct Variable {
 pub struct VariableResolver {
     pub environments: Vec<String>,
     pub source: String,
+
+    #[serde(default)]
+    pub label: Option<String>,
+
+    #[serde(default)]
+    pub url: Option<String>,
+
+    #[serde(default)]
+    pub description: Option<String>,
 
     #[serde(default)]
     pub source_key: Option<String>,

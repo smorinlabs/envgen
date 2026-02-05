@@ -35,7 +35,7 @@ This PRD covers:
 
 - Location: `schemas/envgen.schema.v0.1.0.json`
 - Format: JSON Schema (draft 2020-12)
-- Scope: Validate both `schema_version: "1"` and `"2"` shapes (via conditionals)
+- Scope: Validate `schema_version: "2"` schemas
 
 ### 4.2 Embedded in binary (compile time)
 
@@ -66,20 +66,20 @@ Think of validation in two layers:
 Best for editor tooling and fast feedback:
 
 - Required top-level fields exist: `schema_version`, `metadata`, `environments`, `variables`
-- `schema_version` is one of `"1"` or `"2"`
+- `schema_version` is `"2"`
 - `metadata.description` is a non-empty string
 - `metadata.destination` is a map of env name → path, with at least one entry
 - `environments` is a map of env name → config map (strings)
-- `sources` is a map of source name → `{ command: string }`
+- `sources` is a map of source name → `{ command: string, label?: string, url?: string, description?: string }`
   - Disallow reserved source names: `static`, `manual`
 - `variables` is a map of variable name → variable definition
   - Each variable requires `description`
-  - v1-style variables require `source`
-  - v2-style variables allow either:
+  - Each variable uses either:
     - a single `source`, or
     - `resolvers` (and must not also specify `source` / variable-level `values`)
   - If `source: static` then `values` must be present
   - If a resolver `source: static` then resolver `values` must be present
+  - Resolver entries may include `label`, `url`, and `description` for documentation
 - Reject unknown keys (where possible) to catch typos early
 
 ### 5.2 Semantic validation (Rust `envgen check`)
@@ -141,5 +141,6 @@ Example (top of an envgen YAML file):
 
 - **Hosted `$id` / URL**: publish schema to a stable URL so repos can reference it without vendoring.
 - **Versioned schemas**: `envgen.schema.v1.json`, `envgen.schema.v2.json`, or include `$defs` keyed by version.
+- **Versioned schemas**: `envgen.schema.v2.json` (and future versions), or include `$defs` keyed by version.
 - **Value validators**: optional `validate` blocks (regex/enum/url/etc.) checked during `pull` and/or `check`.
 - **Path validation**: validate `metadata.destination.*` are relative paths (or explicitly allow absolute paths).

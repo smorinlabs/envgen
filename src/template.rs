@@ -40,6 +40,22 @@ pub fn expand_template(template: &str, context: &HashMap<String, String>) -> Res
     Ok(result.to_string())
 }
 
+/// Expand all `{placeholder}` references in a template string using the provided context.
+/// Any placeholder that cannot be resolved is left intact (e.g., `{missing}`).
+pub fn expand_template_best_effort(template: &str, context: &HashMap<String, String>) -> String {
+    let re = Regex::new(r"\{([a-zA-Z_][a-zA-Z0-9_]*)\}").unwrap();
+
+    let result = re.replace_all(template, |caps: &regex::Captures| {
+        let name = &caps[1];
+        context
+            .get(name)
+            .cloned()
+            .unwrap_or_else(|| caps[0].to_string())
+    });
+
+    result.to_string()
+}
+
 /// Build a template context from environment config, variable key, and environment name.
 pub fn build_context(
     env_name: &str,
@@ -92,6 +108,26 @@ mod tests {
         let ctx = HashMap::new();
         let result = expand_template("echo {missing}", &ctx);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_expand_template_best_effort_full() {
+        let mut ctx = HashMap::new();
+        ctx.insert("key".to_string(), "MY_SECRET".to_string());
+        ctx.insert("project".to_string(), "my-project".to_string());
+
+        let result = expand_template_best_effort("echo {key} --project {project}", &ctx);
+        assert_eq!(result, "echo MY_SECRET --project my-project");
+    }
+
+    #[test]
+    fn test_expand_template_best_effort_partial() {
+        let mut ctx = HashMap::new();
+        ctx.insert("project".to_string(), "my-project".to_string());
+
+        let result =
+            expand_template_best_effort("go to https://example.com/{project}/{region}", &ctx);
+        assert_eq!(result, "go to https://example.com/my-project/{region}");
     }
 
     #[test]

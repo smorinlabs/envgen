@@ -149,8 +149,7 @@ variables:
 String. Version of the schema format. Allows the CLI to handle migrations.
 
 Recognized versions:
-- `"1"` — v1 format (single `source` per variable)
-- `"2"` — adds per-environment variable resolvers via `variables.*.resolvers`
+- `"2"` — schema format (single `source` per variable, plus optional per-environment resolvers via `variables.*.resolvers`)
 
 #### `metadata` (required)
 
@@ -208,7 +207,7 @@ Map of variable name → variable definition.
 Each resolver binds a `source` to a specific set of environments for the variable.
 
 Rules:
-- A variable must use **either** `source` (v1-style) **or** `resolvers` (v2-style).
+- A variable must use **either** `source` **or** `resolvers`.
 - Resolver `environments` must not overlap.
 - Resolver environments must fully cover the variable's applicable environments.
 - If a resolver uses `source: static`, it must provide `values` for its environments.
@@ -274,7 +273,7 @@ envgen pull -c config/frontend.env-schema.yaml -e staging
 | `--force` | `-f` | Overwrite the destination file if it already exists. Without this flag, the tool errors if the file exists (even in dry-run). |
 | `--interactive` | `-i` | Prompt for `manual` source variables. Default behavior is to skip them (warning only). |
 | `--destination <path>` | `-d` | Override the destination path from the schema. If a directory is provided, uses the schema destination file name. |
-| `--source-timeout <seconds>` | | Timeout in seconds for each source command (default: 30). |
+| `--source-timeout <seconds>` | | Hard timeout in seconds for each source command; timed-out commands are terminated (default: 30). |
 
 **Behavior:**
 
@@ -286,7 +285,7 @@ envgen pull -c config/frontend.env-schema.yaml -e staging
 4. For each variable applicable to the target environment:
    - Determine its effective source for that environment:
      - If `resolvers` is set (schema v2), pick the resolver whose `environments` contains the target env.
-     - Otherwise, use `source` (schema v1-style).
+     - Otherwise, use `source` (single-source variables).
    - `static`: Read from the appropriate `values[env]`, expand any `{placeholder}` references.
    - `manual`: Prompt for input if `--interactive` is set; otherwise skip with a warning. Show `description` and `source_instructions` when prompting.
    - Any other source: Build the command from the source template, substituting `{key}`, `{environment}`, and environment config values. Execute it and capture stdout (trimmed).
@@ -595,7 +594,7 @@ Exit code: 1
 | Schema validation fails | Error with all issues listed, exit 1 |
 | Destination file exists (no `--force`) | Error: "Destination file already exists. Use --force to overwrite." Exit 1 |
 | Source command fails | Warn, skip variable, continue. Summarize at end. Exit 1 if any required variable failed. |
-| Source command times out | Default 30s timeout per command. `--source-timeout <seconds>` to override. Treated as failure. |
+| Source command times out | Default 30s hard timeout per command. `--source-timeout <seconds>` to override. Timed-out commands are terminated and treated as failure. |
 | Unresolved template placeholder | Error at validation time, before executing any commands. Exit 1. |
 | Manual source when `--interactive` is not set | Warn, skip. Variable omitted from output (does not affect exit code). |
 | Environment not defined in schema | Error: "Environment 'foo' not found. Available: local, staging, production." Exit 1. |

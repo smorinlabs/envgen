@@ -15,7 +15,7 @@ fn test_check_valid_schema() {
         .assert()
         .success()
         .stdout(predicate::str::contains("Schema valid"))
-        .stdout(predicate::str::contains("5 variables"))
+        .stdout(predicate::str::contains("6 variables"))
         .stdout(predicate::str::contains("3 environments"))
         .stdout(predicate::str::contains("1 source"));
 }
@@ -75,4 +75,20 @@ fn test_check_semantic_validation_runs_after_structural() {
         .stdout(predicate::str::contains("Schema errors"))
         .stdout(predicate::str::contains("nonexistent-source"))
         .stdout(predicate::str::contains("not defined in sources"));
+}
+
+#[test]
+fn test_check_static_value_template_placeholders_are_validated() {
+    envgen()
+        .arg("check")
+        .arg("-c")
+        .arg("tests/fixtures/static_template_unresolved.yaml")
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Schema errors"))
+        .stdout(predicate::str::contains(
+            "static_template_unresolved.yaml: variables.BAD_STATIC.values.local",
+        ))
+        .stdout(predicate::str::contains("\"{missing_key}\""))
+        .stdout(predicate::str::contains("environments.local.missing_key"));
 }

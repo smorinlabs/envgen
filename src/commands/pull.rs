@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use crate::output;
 use crate::resolver::{command_source, manual_source, static_source};
 use crate::schema::validation::{load_and_validate_schema_file, SchemaValidation};
+use crate::template;
 
 pub struct PullOptions {
     pub schema_path: PathBuf,
@@ -130,92 +131,151 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
 
         let mut command_count = 0;
         let mut static_manual_count = 0;
-        let mut var_count = 0;
+        let mut would_write_count = 0;
+        let mut failed_required = 0;
 
         for (var_name, var) in &schema.variables {
             if !var.applies_to(&opts.env_name) {
                 continue;
             }
-            var_count += 1;
 
             let source = match var.effective_source_for_env(&opts.env_name) {
                 Some(s) => s,
                 None => {
                     println!("  {}", var_name);
                     println!("    source:  <missing>");
+                    println!(
+                        "    error:   {}",
+                        "No source configured for this variable/environment"
+                    );
                     println!();
+                    if var.required {
+                        failed_required += 1;
+                    }
                     continue;
                 }
             };
             if source == "static" {
                 static_manual_count += 1;
-                let value = match var.values_for_env(&opts.env_name) {
+                let key = var.effective_key_for_env(var_name, &opts.env_name);
+                let (value, ok) = match var.values_for_env(&opts.env_name) {
                     Some(values) => match static_source::resolve_static(
                         var_name,
+                        &key,
                         values,
                         &opts.env_name,
                         env_config,
                     ) {
                         Ok(v) => {
-                            if var.sensitive {
+                            let shown_value = if var.sensitive {
                                 output::mask_value(&v, opts.show_secrets)
                             } else {
                                 v
-                            }
+                            };
+                            (shown_value, true)
                         }
-                        Err(e) => format!("<error: {}>", e),
+                        Err(e) => {
+                            if var.required {
+                                failed_required += 1;
+                            }
+                            (format!("<error: {}>", e), false)
+                        }
                     },
-                    None => "<missing>".to_string(),
+                    None => {
+                        if var.required {
+                            failed_required += 1;
+                        }
+                        ("<missing>".to_string(), false)
+                    }
                 };
                 println!("  {}", var_name);
                 println!("    source:  static");
                 println!("    value:   {}", value);
                 println!();
+                if ok {
+                    would_write_count += 1;
+                }
             } else if source == "manual" {
                 static_manual_count += 1;
                 println!("  {}", var_name);
                 if opts.interactive {
                     println!("    source:  manual (interactive prompt)");
+                    would_write_count += 1;
                 } else {
                     println!("    source:  manual (skipped; use --interactive to prompt)");
                 }
                 if let Some(instructions) = &var.source_instructions {
-                    print_labeled_multiline("    ", "instructions", instructions);
+                    let key = var.effective_key_for_env(var_name, &opts.env_name);
+                    let ctx = template::build_context(&opts.env_name, env_config, &key);
+                    let expanded = template::expand_template_best_effort(instructions, &ctx);
+                    print_labeled_multiline("    ", "instructions", &expanded);
                 }
                 println!();
             } else {
-                command_count += 1;
-                if let Some(src) = schema.sources.get(source) {
-                    let key = var.effective_key_for_env(var_name, &opts.env_name);
-                    let cmd = command_source::build_command(
-                        &src.command,
-                        var_name,
-                        Some(&key),
-                        &opts.env_name,
-                        env_config,
-                    )
-                    .unwrap_or_else(|e| format!("<error: {}>", e));
+                match schema.sources.get(source) {
+                    Some(src) => {
+                        let key = var.effective_key_for_env(var_name, &opts.env_name);
+                        let cmd = match command_source::build_command(
+                            &src.command,
+                            var_name,
+                            Some(&key),
+                            &opts.env_name,
+                            env_config,
+                        ) {
+                            Ok(cmd) => {
+                                command_count += 1;
+                                would_write_count += 1;
+                                cmd
+                            }
+                            Err(e) => {
+                                if var.required {
+                                    failed_required += 1;
+                                }
+                                format!("<error: {}>", e)
+                            }
+                        };
 
-                    println!("  {}", var_name);
-                    println!("    source:  {}", source);
-                    println!("    command: {}", cmd);
-                    println!();
+                        println!("  {}", var_name);
+                        println!("    source:  {}", source);
+                        println!("    command: {}", cmd);
+                        println!();
+                    }
+                    None => {
+                        println!("  {}", var_name);
+                        println!("    source:  {}", source);
+                        println!("    command: <missing>");
+                        println!("    error:   Source \"{}\" is not defined in sources.", source);
+                        println!();
+                        if var.required {
+                            failed_required += 1;
+                        }
+                    }
                 }
             }
         }
 
-        println!(
-            "{} variable{} would be written to {}",
-            var_count,
-            if var_count == 1 { "" } else { "s" },
-            dest_path.display()
-        );
+        if would_write_count > 0 {
+            println!(
+                "{} variable{} would be written to {}",
+                would_write_count,
+                if would_write_count == 1 { "" } else { "s" },
+                dest_path.display()
+            );
+        } else {
+            println!("No variables would be resolved. Output file would not be written.");
+        }
         println!(
             "{} command{} would be executed ({} static/manual)",
             command_count,
             if command_count == 1 { "" } else { "s" },
             static_manual_count
         );
+        if failed_required > 0 {
+            println!();
+            println!("Exit code: 1");
+            return Ok(false);
+        }
+
         return Ok(true);
     }
 
@@ -250,9 +310,11 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
             }
         };
         if source == "static" {
+            let key = var.effective_key_for_env(var_name, &opts.env_name);
             match var.values_for_env(&opts.env_name) {
                 Some(values) => match static_source::resolve_static(
                     var_name,
+                    &key,
                     values,
                     &opts.env_name,
                     env_config,
