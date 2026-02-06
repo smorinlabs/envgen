@@ -73,7 +73,7 @@ jobs:
           cargo test --locked
 
   msrv:
-    name: MSRV (Rust 1.78)
+    name: MSRV (Rust 1.83)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -82,7 +82,7 @@ jobs:
       - name: Setup Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.78.0
+          toolchain: 1.83.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
