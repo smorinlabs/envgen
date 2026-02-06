@@ -46,7 +46,7 @@ jobs:
         run: uv tool install pre-commit
 
       - name: Install actionlint
-        run: make install-actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@latest
 
       - name: Run checks
         env:
