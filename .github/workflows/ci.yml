@@ -45,6 +45,9 @@ jobs:
       - name: Install pre-commit
         run: uv tool install pre-commit
 
+      - name: Install actionlint
+        run: make install-actionlint
+
       - name: Run checks
         env:
           UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
