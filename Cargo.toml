@@ -8,7 +8,7 @@ repository = "https://github.com/smorinlabs/envgen"
 license = "MIT"
 keywords = ["dotenv", "env", "yaml", "schema", "cli"]
 categories = ["command-line-utilities", "development-tools"]
-rust-version = "1.75"
+rust-version = "1.78"
 
 include = [
     "src/**",
@@ -33,7 +33,6 @@ dialoguer = "0.11"
 colored = "2"
 anyhow = "1"
 regex = "1"
-
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 

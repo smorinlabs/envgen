@@ -42,6 +42,9 @@ jobs:
       - name: Install cargo tools
         run: cargo install cargo-audit cargo-machete typos-cli
 
+      - name: Install pre-commit
+        run: uv tool install pre-commit
+
       - name: Run checks
         env:
           UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
