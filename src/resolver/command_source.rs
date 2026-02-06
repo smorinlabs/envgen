@@ -151,7 +151,10 @@ pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<Command
         );
     }
     let stdout = String::from_utf8_lossy(&stdout_bytes).trim().to_string();
-    Ok(CommandResult { value: stdout, stderr })
+    Ok(CommandResult {
+        value: stdout,
+        stderr,
+    })
 }
 
 #[cfg(test)]

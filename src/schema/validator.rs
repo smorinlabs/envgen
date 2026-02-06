@@ -281,8 +281,7 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                             if let Some(env_config) = schema.environments.get(*env) {
                                 let value = values.get(*env).unwrap();
                                 let missing = unresolved_template_placeholders(value, env_config);
-                                let yaml_path =
-                                    format!("variables.{}.values.{}", var_name, env);
+                                let yaml_path = format!("variables.{}.values.{}", var_name, env);
                                 if let Some(msg) = format_unresolved_template_error(
                                     &yaml_path,
                                     "static value",
@@ -596,7 +595,8 @@ variables:
         let errors = errors_for(yaml);
         assert!(
             errors.iter().any(|e| {
-                e.contains("variables.FOO.resolvers[1].values.local") && e.contains("\"{missing_key}\"")
+                e.contains("variables.FOO.resolvers[1].values.local")
+                    && e.contains("\"{missing_key}\"")
             }),
             "Expected unresolved placeholder error for static resolver value, got: {:?}",
             errors

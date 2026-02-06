@@ -39,6 +39,9 @@ jobs:
           go install github.com/google/yamlfmt/cmd/yamlfmt@v0.15.0
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
+      - name: Install cargo tools
+        run: cargo install cargo-audit cargo-machete typos-cli
+
       - name: Run checks
         env:
           UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
@@ -67,7 +70,7 @@ jobs:
           cargo test --locked
 
   msrv:
-    name: MSRV (Rust 1.75)
+    name: MSRV (Rust 1.78)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -76,7 +79,7 @@ jobs:
       - name: Setup Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.75.0
+          toolchain: 1.78.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2

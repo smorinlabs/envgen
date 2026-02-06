@@ -144,10 +144,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                 None => {
                     println!("  {}", var_name);
                     println!("    source:  <missing>");
-                    println!(
-                        "    error:   {}",
-                        "No source configured for this variable/environment"
-                    );
+                    println!("    error:   No source configured for this variable/environment");
                     println!();
                     if var.required {
                         failed_required += 1;
@@ -244,7 +241,10 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                         println!("  {}", var_name);
                         println!("    source:  {}", source);
                         println!("    command: <missing>");
-                        println!("    error:   Source \"{}\" is not defined in sources.", source);
+                        println!(
+                            "    error:   Source \"{}\" is not defined in sources.",
+                            source
+                        );
                         println!();
                         if var.required {
                             failed_required += 1;
