@@ -26,10 +26,9 @@ This PRD covers **authoring the schema YAML** (the “source of truth”), not g
 
 - Editing or deleting existing environments/sources/variables/env keys.
 - Supporting schema versions other than `"2"`.
-- Supporting schema versions beyond `"2"` until the codebase and JSON Schema recognize them.
 - Reformatting/canonicalizing the entire file (this would break comment preservation).
 - Validating resolved secret *values* (regex/enum checks on final `.env` contents).
-- Interactively running `pull` (this PRD is schema authoring only).
+- Changing `pull` behavior (this PRD is schema authoring only).
 
 ## 4. Terminology
 
@@ -48,12 +47,12 @@ This PRD covers **authoring the schema YAML** (the “source of truth”), not g
 
 ### 5.2 Naming constraints
 
-These must match the embedded JSON Schema and template placeholder constraints:
+These are split between shared validators and interactive policy:
 
 - **Variable names**: `^[A-Za-z_][A-Za-z0-9_]*$`
 - **Environment config keys**: `^[A-Za-z_][A-Za-z0-9_]*$`
 - **Source names**: `^[A-Za-z0-9][A-Za-z0-9_-]*$` and must not be `static` or `manual`
-- **Reserved environment config keys**: `environment` and `key` are reserved placeholders and must not be added as config keys.
+- **Reserved environment config keys (interactive policy)**: `environment` and `key` are built-in placeholders and must not be added as config keys.
 
 ### 5.3 Variable shape constraints (schema v2)
 
@@ -95,6 +94,7 @@ Proposed flags (existing flags retained):
 Notes:
 - Default output name should remain consistent with the existing `init` behavior (`env.dev.yaml`).
 - The generated file must satisfy the JSON Schema requirement that `environments` and `variables` are non-empty.
+- The finish/write action is blocked until at least one environment and one variable are staged.
 
 ### 6.2 `envgen add --interactive`
 
@@ -193,6 +193,9 @@ Required prompts:
 - `command` (non-empty string)
 
 Optional prompts:
+- `label`
+- `url`
+- `description`
 - Show help text listing known placeholders:
   - built-ins: `{key}`, `{environment}`
   - plus any env config keys currently present
@@ -203,6 +206,9 @@ Snippet preview example:
 sources:
   firebase-sm:
     command: "firebase functions:secrets:access {key} --project {firebase_project}"
+    label: "Firebase Secret Manager"
+    url: "https://console.firebase.google.com"
+    description: "Shared secret source for non-local environments."
 ```
 
 Collision rules:
@@ -250,6 +256,7 @@ Prompts:
 - Optionally group environments that share a source into a single resolver (or auto-group in the UI).
 - For any resolver where `source: static`, prompt for `values` for each env in that resolver.
 - Optional: variable-level `source_key` (and optionally per-resolver `source_key` overrides in an “Advanced” toggle)
+- Optional per-resolver docs: `label`, `url`, `description`
 - Optional: `source_instructions`
 - Optional: `notes`
 
@@ -291,8 +298,15 @@ Before allowing an entry to be staged:
 ### 9.3 Final validation
 
 Before writing (or before printing):
-- Re-parse the full updated YAML and run the same semantic validation as `envgen check`.
+- Re-parse the full updated YAML and run the same validation pipeline as `envgen check`:
+  1) Structural validation against embedded JSON Schema.
+  2) Semantic validation in Rust.
 - If validation fails, do not write; display all errors.
+
+### 9.4 Exit codes
+
+- Exit `0`: staged output passes structural + semantic validation (`--print`/`--dry-run` included).
+- Exit `1`: collisions, invalid input, structural/semantic validation failures, or write failures.
 
 ## 10. Comment-Preserving Write Strategy
 
@@ -303,6 +317,7 @@ Guiding approach:
 - Apply **minimal text insertions** into the appropriate top-level mapping (`metadata.destination`, `environments`, `sources`, `variables`).
 - Do not reorder or rewrite existing keys.
 - Insert new entries at the end of the relevant mapping to minimize disruption.
+- If a target top-level mapping does not exist (e.g., `sources`), create it once and then append entries under it.
 
 Open engineering detail (implementation choice):
 - Use a YAML editing approach that can preserve comments (token-aware), or implement a conservative text patcher that inserts new blocks based on scanning indentation and top-level section boundaries.
