@@ -151,7 +151,7 @@ envgen docs -c env.dev.yaml
 
 Useful flags:
 
-- `pull`: `--dry-run`, `--force`, `--destination`, `--source-timeout`, `--interactive`, `--show-secrets`
+- `pull`: `--dry-run`, `--force`, `--destination`, `--source-timeout`, `--interactive`, `--show-secrets`, `--write-on-error`
 - `pull --source-timeout <seconds>`: hard timeout per source command; timed-out commands are terminated
 - `list`: `--env`, `--format`
 
@@ -257,6 +257,7 @@ Point the YAML Language Server at it (top of your schema file):
 
 - **Command sources are executed via `sh -c`**. Treat schemas as code; don’t run untrusted schemas.
 - `envgen pull` refuses to overwrite existing files unless you pass `--force`.
+- By default, `envgen pull` does not write the destination file when write-blocking failures occur (any command-source failure, or required static/manual failure). Use `--write-on-error` to write resolved variables anyway.
 - `--dry-run` masks `sensitive: true` values unless you pass `--show-secrets`.
 
 ## Development

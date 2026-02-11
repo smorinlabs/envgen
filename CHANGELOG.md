@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `envgen pull` now uses transactional write gating: by default it does not write the destination file when write-blocking failures occur (any command-source failure, or required non-command failure).
+- Added `envgen pull --write-on-error` to allow writing resolved variables even when write-blocking failures occurred (exit code remains non-zero).
+
 ### Deprecated
 
 ### Removed

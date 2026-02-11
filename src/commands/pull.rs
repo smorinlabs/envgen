@@ -16,6 +16,7 @@ pub struct PullOptions {
     pub interactive: bool,
     pub destination_path: Option<PathBuf>,
     pub source_timeout: u64,
+    pub write_on_error: bool,
 }
 
 /// A resolved variable result.
@@ -41,6 +42,10 @@ fn print_labeled_multiline(indent: &str, label: &str, value: &str) {
     for line in lines {
         println!("{}  {}", indent, line);
     }
+}
+
+fn is_command_source(source: &str) -> bool {
+    source != "static" && source != "manual" && source != "<missing>"
 }
 
 /// Run the `pull` command: resolve variables and write the .env file.
@@ -430,6 +435,8 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
     let mut resolved_vars: Vec<(String, String)> = Vec::new();
     let mut warnings: Vec<String> = Vec::new();
     let mut failed_required = 0;
+    let mut command_failures = 0;
+    let mut required_non_command_failures = 0;
 
     // We need to match results back to the original variable order
     let var_order: Vec<String> = applicable_vars
@@ -473,6 +480,9 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                         "{} could not be resolved (required={})",
                         var_name, var.required
                     ));
+                    if is_command_source(source_display) {
+                        command_failures += 1;
+                    }
                 }
                 ResolveResult::Failed(_, error) => {
                     println!(
@@ -486,8 +496,14 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
                         "{} could not be resolved (required={})",
                         var_name, var.required
                     ));
+                    if is_command_source(source_display) {
+                        command_failures += 1;
+                    }
                     if var.required {
                         failed_required += 1;
+                        if !is_command_source(source_display) {
+                            required_non_command_failures += 1;
+                        }
                     }
                 }
             }
@@ -496,20 +512,28 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
 
     println!();
 
+    let has_write_blocking_failure = command_failures > 0 || required_non_command_failures > 0;
+
     // Write output file
     if !resolved_vars.is_empty() {
-        output::write_env_file(
-            &dest_path,
-            &opts.schema_path.to_string_lossy(),
-            &opts.env_name,
-            &resolved_vars,
-        )?;
-        println!(
-            "Wrote {} variable{} to {}",
-            resolved_vars.len(),
-            if resolved_vars.len() == 1 { "" } else { "s" },
-            dest_path.display()
-        );
+        if has_write_blocking_failure && !opts.write_on_error {
+            println!(
+                "No file written due to write-blocking resolution failures. Re-run with --write-on-error to write resolved variables."
+            );
+        } else {
+            output::write_env_file(
+                &dest_path,
+                &opts.schema_path.to_string_lossy(),
+                &opts.env_name,
+                &resolved_vars,
+            )?;
+            println!(
+                "Wrote {} variable{} to {}",
+                resolved_vars.len(),
+                if resolved_vars.len() == 1 { "" } else { "s" },
+                dest_path.display()
+            );
+        }
     } else {
         println!("No variables resolved. Output file not written.");
     }
@@ -523,7 +547,7 @@ pub async fn run_pull(opts: PullOptions) -> Result<bool> {
         );
     }
 
-    if failed_required > 0 {
+    if failed_required > 0 || command_failures > 0 {
         println!();
         println!("Exit code: 1");
         Ok(false)

@@ -316,26 +316,152 @@ fn test_pull_required_command_failure_exits_1() {
 }
 
 #[test]
-fn test_pull_optional_command_failure_exits_0_with_warning() {
+fn test_pull_mixed_optional_command_failure_exits_1_and_does_not_write() {
     let tmp = TempDir::new().unwrap();
     let output_path = tmp.path().join(".env");
 
     envgen()
         .arg("pull")
         .arg("-c")
-        .arg("tests/fixtures/optional_failing_command.yaml")
+        .arg("tests/fixtures/mixed_optional_command_failure.yaml")
         .arg("-e")
         .arg("local")
         .arg("--destination")
         .arg(output_path.to_str().unwrap())
         .assert()
-        .success()
+        .failure()
         .stdout(predicate::str::contains("warning"))
-        .stdout(predicate::str::contains("FAIL_OPTIONAL"));
+        .stdout(predicate::str::contains("FAIL_OPTIONAL"))
+        .stdout(predicate::str::contains("Exit code: 1"))
+        .stdout(predicate::str::contains(
+            "No file written due to write-blocking resolution failures.",
+        ));
+
+    assert!(!output_path.exists(), "output file should not be written");
+}
+
+#[test]
+fn test_pull_mixed_required_command_failure_exits_1_and_does_not_write() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/mixed_required_command_failure.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("warning"))
+        .stdout(predicate::str::contains("FAIL_REQUIRED"))
+        .stdout(predicate::str::contains("Exit code: 1"))
+        .stdout(predicate::str::contains(
+            "No file written due to write-blocking resolution failures.",
+        ));
+
+    assert!(!output_path.exists(), "output file should not be written");
+}
+
+#[test]
+fn test_pull_mixed_optional_command_failure_write_on_error_writes_partial_and_exits_1() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/mixed_optional_command_failure.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--write-on-error")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Wrote 1 variable to"))
+        .stdout(predicate::str::contains("Exit code: 1"));
 
     let content = fs::read_to_string(&output_path).unwrap();
     assert!(content.contains("OK_STATIC=ok"));
     assert!(!content.contains("FAIL_OPTIONAL="));
+}
+
+#[test]
+fn test_pull_mixed_required_command_failure_write_on_error_writes_partial_and_exits_1() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/mixed_required_command_failure.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--write-on-error")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Wrote 1 variable to"))
+        .stdout(predicate::str::contains("Exit code: 1"));
+
+    let content = fs::read_to_string(&output_path).unwrap();
+    assert!(content.contains("OK_STATIC=ok"));
+    assert!(!content.contains("FAIL_REQUIRED="));
+}
+
+#[test]
+fn test_pull_force_keeps_existing_file_when_write_blocked() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+    fs::write(&output_path, "KEEP=1\n").unwrap();
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/mixed_optional_command_failure.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--force")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains(
+            "No file written due to write-blocking resolution failures.",
+        ));
+
+    let content = fs::read_to_string(&output_path).unwrap();
+    assert_eq!(content, "KEEP=1\n");
+}
+
+#[test]
+fn test_pull_force_with_write_on_error_overwrites_existing_file() {
+    let tmp = TempDir::new().unwrap();
+    let output_path = tmp.path().join(".env");
+    fs::write(&output_path, "KEEP=1\n").unwrap();
+
+    envgen()
+        .arg("pull")
+        .arg("-c")
+        .arg("tests/fixtures/mixed_optional_command_failure.yaml")
+        .arg("-e")
+        .arg("local")
+        .arg("--force")
+        .arg("--write-on-error")
+        .arg("--destination")
+        .arg(output_path.to_str().unwrap())
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains("Wrote 1 variable to"))
+        .stdout(predicate::str::contains("Exit code: 1"));
+
+    let content = fs::read_to_string(&output_path).unwrap();
+    assert!(content.contains("OK_STATIC=ok"));
+    assert!(!content.contains("KEEP=1"));
 }
 
 #[test]

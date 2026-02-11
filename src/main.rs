@@ -54,6 +54,10 @@ enum Commands {
         /// Timeout in seconds for each source command (hard timeout; timed-out commands are terminated)
         #[arg(long, default_value = "30")]
         source_timeout: u64,
+
+        /// Write resolved variables even when pull has write-blocking resolution failures
+        #[arg(long)]
+        write_on_error: bool,
     },
 
     /// Create a sample schema file
@@ -193,6 +197,7 @@ async fn main() {
             interactive,
             ref destination,
             source_timeout,
+            write_on_error,
         } => {
             let opts = commands::pull::PullOptions {
                 schema_path: config.clone(),
@@ -203,6 +208,7 @@ async fn main() {
                 interactive,
                 destination_path: destination.clone(),
                 source_timeout,
+                write_on_error,
             };
             match commands::pull::run_pull(opts).await {
                 Ok(true) => 0,

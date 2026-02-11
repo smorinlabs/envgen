@@ -274,6 +274,7 @@ envgen pull -c config/frontend.env-schema.yaml -e staging
 | `--interactive` | `-i` | Prompt for `manual` source variables. Default behavior is to skip them (warning only). |
 | `--destination <path>` | `-d` | Override the destination path from the schema. If a directory is provided, uses the schema destination file name. |
 | `--source-timeout <seconds>` | | Hard timeout in seconds for each source command; timed-out commands are terminated (default: 30). |
+| `--write-on-error` | | Write resolved variables even when pull has write-blocking resolution failures. Exit code remains 1 when failures occurred. |
 
 **Behavior:**
 
@@ -291,10 +292,14 @@ envgen pull -c config/frontend.env-schema.yaml -e staging
    - Any other source: Build the command from the source template, substituting `{key}`, `{environment}`, and environment config values. Execute it and capture stdout (trimmed).
 5. If resolving a variable fails:
    - The variable is omitted from the output file.
-   - If `required: true`, this counts as a failure and `pull` exits with code 1 (after attempting all variables).
-   - If `required: false`, this is treated as a warning and does not affect exit code.
+   - Any command-source failure counts as a failure and `pull` exits with code 1 (after attempting all variables), regardless of `required`.
+   - Any non-command failure where `required: true` counts as a failure and `pull` exits with code 1.
    - When not using `--interactive`, `manual` variables are always skipped (warning) regardless of `required`.
-6. Write the output file (if at least one variable was resolved). Include a header comment with generation metadata.
+6. Write the output file only if at least one variable was resolved **and** there are no write-blocking failures.
+   - Write-blocking failures are: any command-source failure, or any required non-command failure.
+   - `--write-on-error` overrides this gate and allows writing resolved variables anyway.
+   - When writes are blocked, the destination file is left untouched.
+   - Include a header comment with generation metadata when writing.
    - Values are written as `KEY=VALUE`.
    - Values are quoted and escaped when needed (e.g., spaces, `#`, quotes, newlines).
    - Parent directories for the destination path are created automatically.
@@ -577,7 +582,7 @@ Pulling 9 variables for environment "staging"...
   ✓ TOKEN_ENCRYPTION_KEY    (firebase-sm)
   ✓ OPENAI_API_KEY          (firebase-sm)
 
-Wrote 8 variables to functions/.env.local
+No file written due to write-blocking resolution failures. Re-run with --write-on-error to write resolved variables.
 1 warning: LOOPS_API_KEY could not be resolved (required=true)
 
 Exit code: 1
@@ -593,7 +598,7 @@ Exit code: 1
 | Schema YAML invalid | Error with parse location, exit 1 |
 | Schema validation fails | Error with all issues listed, exit 1 |
 | Destination file exists (no `--force`) | Error: "Destination file already exists. Use --force to overwrite." Exit 1 |
-| Source command fails | Warn, skip variable, continue. Summarize at end. Exit 1 if any required variable failed. |
+| Source command fails | Warn, skip variable, continue. Summarize at end. Exit 1. File write is blocked unless `--write-on-error` is set. |
 | Source command times out | Default 30s hard timeout per command. `--source-timeout <seconds>` to override. Timed-out commands are terminated and treated as failure. |
 | Unresolved template placeholder | Error at validation time, before executing any commands. Exit 1. |
 | Manual source when `--interactive` is not set | Warn, skip. Variable omitted from output (does not affect exit code). |
