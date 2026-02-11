@@ -5,4 +5,6 @@
 .uv-tools
 .DS_Store
 .env.local
+.env.dev
 env.dev.yaml
+envgen.schema.v*.json
