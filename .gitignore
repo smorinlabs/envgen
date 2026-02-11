@@ -4,3 +4,5 @@
 .uv-cache
 .uv-tools
 .DS_Store
+.env.local
+env.dev.yaml
