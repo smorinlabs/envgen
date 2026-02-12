@@ -1,6 +1,6 @@
 # envgen
 
-Generate `.env` files from a declarative YAML schema.
+Generate `.env` files from a  declarative YAML schema.
 
 `envgen` is a small Rust CLI for keeping environment variable definitions (docs + sources + per-environment behavior) in one place, then generating `.env` files safely and repeatably.
 
