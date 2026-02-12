@@ -59,10 +59,28 @@ install-rust-tools: ## Install Rust components (rustfmt, clippy)
 	@command -v rustup >/dev/null 2>&1 || { echo "ERROR: rustup not found. Install Rust from https://rustup.rs/."; exit 1; }
 	rustup component add rustfmt clippy
 
-.PHONY: install-cargo-tools
-install-cargo-tools: ## Install cargo-audit, cargo-machete, cargo-msrv, and typos
+.PHONY: install-cargo-audit
+install-cargo-audit: ## Install cargo-audit
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-audit cargo-machete cargo-msrv --locked typos-cli@1.32.0
+	cargo install cargo-audit --locked
+
+.PHONY: install-cargo-machete
+install-cargo-machete: ## Install cargo-machete
+	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	cargo install cargo-machete --locked
+
+.PHONY: install-cargo-msrv
+install-cargo-msrv: ## Install cargo-msrv
+	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	cargo install cargo-msrv --locked
+
+.PHONY: install-typos
+install-typos: ## Install typos-cli
+	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	cargo install typos-cli@1.32.0 --locked
+
+.PHONY: install-cargo-tools
+install-cargo-tools: install-cargo-audit install-cargo-machete install-cargo-msrv install-typos ## Install all cargo tools
 
 .PHONY: install-pre-commit
 install-pre-commit: ## Install pre-commit (prefers uv, then pipx, then brew, then pip)
