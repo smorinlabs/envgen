@@ -32,7 +32,7 @@ This PRD covers **authoring the schema YAML** (the “source of truth”), not g
 
 ## 4. Terminology
 
-- **Schema file**: The YAML file consumed by `envgen` (e.g., `config/frontend.env-schema.yaml`).
+- **Schema file**: The YAML file consumed by `envgen` (e.g., `env.dev.yaml`).
 - **Environment**: A top-level entry under `environments:<env_name>`.
 - **Destination mapping**: A top-level entry under `metadata.destination:<env_name>` used by `pull` to choose output path.
 - **Environment config key**: A key/value pair under `environments.<env_name>` used as a `{placeholder}` in templates.
@@ -326,16 +326,16 @@ Open engineering detail (implementation choice):
 
 ```bash
 # Create a new v2 schema with a TUI
-envgen init --interactive -o config/frontend.env-schema.yaml
+envgen init --interactive -o env.dev.yaml
 
 # Add entries to an existing schema v2 file
-envgen add --interactive -c config/frontend.env-schema.yaml
+envgen add --interactive -c env.dev.yaml
 
 # Dry run: no write
-envgen add -i -c config/frontend.env-schema.yaml --dry-run
+envgen add -i -c env.dev.yaml --dry-run
 
 # Print full updated YAML; no write
-envgen add -i -c config/frontend.env-schema.yaml --print
+envgen add -i -c env.dev.yaml --print
 ```
 
 ## 12. Open Questions

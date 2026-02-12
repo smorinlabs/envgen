@@ -40,7 +40,7 @@ jobs:
           echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
 
       - name: Install cargo tools
-        run: cargo install cargo-audit cargo-machete typos-cli
+        run: cargo install cargo-audit cargo-machete typos-cli@1.32.0
 
       - name: Install pre-commit
         run: uv tool install pre-commit
@@ -76,22 +76,42 @@ jobs:
           cargo test --locked
 
   msrv:
-    name: MSRV (Rust 1.83)
+    name: MSRV Check
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # Extract MSRV from Cargo.toml (single source of truth)
+      - name: Extract MSRV from Cargo.toml
+        id: msrv
+        run: |
+          MSRV=$(grep '^rust-version' Cargo.toml | sed 's/rust-version = "\(.*\)"/\1/')
+          echo "version=$MSRV" >> $GITHUB_OUTPUT
+          echo "Using MSRV: $MSRV"
+
       - name: Setup Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: 1.83.0
+          toolchain: ${{ steps.msrv.outputs.version }}
 
       - name: Rust cache
         uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
 
-      - name: Build + integration tests
+      # Fast check: Does it compile on stated MSRV?
+      - name: Build with MSRV
+        run: cargo build --locked
+
+      - name: Run integration tests
         run: |
-          cargo build --locked
           cargo test --locked --test test_check
           cargo test --locked --test test_schema
+
+      # Thorough check: Is stated MSRV actually correct?
+      - name: Install cargo-msrv
+        run: cargo install cargo-msrv
+
+      - name: Verify MSRV is accurate
+        run: cargo msrv verify

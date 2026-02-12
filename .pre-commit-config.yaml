@@ -41,6 +41,12 @@ repos:
         entry: cargo machete
         language: system
         pass_filenames: false
+      - id: cargo-msrv-verify
+        name: cargo msrv verify
+        entry: cargo msrv verify
+        language: system
+        pass_filenames: false
+        types: [rust]
       - id: actionlint
         name: actionlint
         entry: make lint-actions

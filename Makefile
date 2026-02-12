@@ -43,6 +43,7 @@ check-tools: ## Verify required tooling is installed
 	@cargo clippy --version >/dev/null 2>&1 || { echo "ERROR: clippy not found. Run: make install-rust-tools (or rustup component add clippy)"; exit 1; }
 	@command -v cargo-audit >/dev/null 2>&1 || { echo "ERROR: cargo-audit not found. Run: make install-cargo-tools (or cargo install cargo-audit)"; exit 1; }
 	@command -v cargo-machete >/dev/null 2>&1 || { echo "ERROR: cargo-machete not found. Run: make install-cargo-tools (or cargo install cargo-machete)"; exit 1; }
+	@command -v cargo-msrv >/dev/null 2>&1 || { echo "ERROR: cargo-msrv not found. Run: make install-cargo-tools (or cargo install cargo-msrv)"; exit 1; }
 	@command -v typos >/dev/null 2>&1 || { echo "ERROR: typos not found. Run: make install-cargo-tools (or cargo install typos-cli)"; exit 1; }
 	@command -v pre-commit >/dev/null 2>&1 || { echo "ERROR: pre-commit not found. Run: make install-pre-commit (or uv tool install pre-commit / brew install pre-commit / pipx install pre-commit)"; exit 1; }
 	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found. Run: make install-node"; exit 1; }
@@ -59,9 +60,9 @@ install-rust-tools: ## Install Rust components (rustfmt, clippy)
 	rustup component add rustfmt clippy
 
 .PHONY: install-cargo-tools
-install-cargo-tools: ## Install cargo-audit, cargo-machete, and typos
+install-cargo-tools: ## Install cargo-audit, cargo-machete, cargo-msrv, and typos
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-audit cargo-machete typos-cli
+	cargo install cargo-audit cargo-machete cargo-msrv typos-cli@1.32.0
 
 .PHONY: install-pre-commit
 install-pre-commit: ## Install pre-commit (prefers uv, then pipx, then brew, then pip)
@@ -178,63 +179,6 @@ fmt-schema: ## Auto-format the schema file (Biome)
 	@echo "Formatting schema (Biome)... (first run may download the tool)"
 	$(BIOME) format --write $(SCHEMA_FILE)
 
-# ─── Schema Validation ──────────────────────────────────────────
-
-.PHONY: check-frontend
-check-frontend: ## Validate the frontend schema
-	$(ENVGEN) check -c config/frontend.env-schema.yaml
-
-.PHONY: check-backend
-check-backend: ## Validate the backend schema
-	$(ENVGEN) check -c config/backend.env-schema.yaml
-
-.PHONY: check-all
-check-all: check-frontend check-backend ## Validate all schemas
-
-# ─── Environment Generation ─────────────────────────────────────
-
-.PHONY: env-local
-env-local: ## Generate all local .env files
-	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e local --force
-	$(ENVGEN) pull -c config/backend.env-schema.yaml -e local --force
-
-.PHONY: env-staging
-env-staging: ## Generate all staging .env files
-	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e staging --force
-	$(ENVGEN) pull -c config/backend.env-schema.yaml -e staging --force
-
-.PHONY: env-production
-env-production: ## Generate all production .env files
-	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e production --force
-	$(ENVGEN) pull -c config/backend.env-schema.yaml -e production --force
-
-# ─── Dry Runs ───────────────────────────────────────────────────
-
-.PHONY: dry-run-local
-dry-run-local: ## Preview local .env generation
-	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e local --dry-run
-	@echo ""
-	$(ENVGEN) pull -c config/backend.env-schema.yaml -e local --dry-run
-
-.PHONY: dry-run-staging
-dry-run-staging: ## Preview staging .env generation
-	$(ENVGEN) pull -c config/frontend.env-schema.yaml -e staging --dry-run
-	@echo ""
-	$(ENVGEN) pull -c config/backend.env-schema.yaml -e staging --dry-run
-
-# ─── Listing ────────────────────────────────────────────────────
-
-.PHONY: list-frontend
-list-frontend: ## List all frontend variables
-	$(ENVGEN) list -c config/frontend.env-schema.yaml
-
-.PHONY: list-backend
-list-backend: ## List all backend variables
-	$(ENVGEN) list -c config/backend.env-schema.yaml
-
-.PHONY: list-all
-list-all: list-frontend list-backend ## List all variables from all schemas
-
 # ─── Commit Message ──────────────────────────────────────────────
 
 CLAUDE ?= claude
@@ -265,6 +209,20 @@ commit-message: ## Generate a conventional commit message for staged/changed fil
 		The subject line must be lowercase, imperative mood, no period at the end, max 72 chars. \
 		If the changes are substantial, add a blank line followed by a short body (max 3 bullet points). \
 		Output ONLY the commit message, nothing else — no markdown fences, no explanation."
+
+# ─── MSRV (Minimum Supported Rust Version) ──────────────────────
+# Requires: cargo install cargo-msrv
+
+.PHONY: msrv-verify msrv-find msrv-list
+
+msrv-verify: ## Verify the crate builds with the declared MSRV (runs tests too)
+	cargo msrv verify -- cargo test
+
+msrv-find: ## Find the actual MSRV by bisecting through Rust versions
+	cargo msrv find
+
+msrv-list: ## List all compatible Rust versions
+	cargo msrv list
 
 # ─── Help ───────────────────────────────────────────────────────
 
