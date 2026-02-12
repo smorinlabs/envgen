@@ -111,7 +111,7 @@ jobs:
 
       # Thorough check: Is stated MSRV actually correct?
       - name: Install cargo-msrv
-        run: cargo install cargo-msrv
+        run: cargo install cargo-msrv --locked
 
       - name: Verify MSRV is accurate
         run: cargo msrv verify

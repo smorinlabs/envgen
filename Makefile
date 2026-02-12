@@ -62,7 +62,7 @@ install-rust-tools: ## Install Rust components (rustfmt, clippy)
 .PHONY: install-cargo-tools
 install-cargo-tools: ## Install cargo-audit, cargo-machete, cargo-msrv, and typos
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-audit cargo-machete cargo-msrv typos-cli@1.32.0
+	cargo install cargo-audit cargo-machete cargo-msrv --locked typos-cli@1.32.0
 
 .PHONY: install-pre-commit
 install-pre-commit: ## Install pre-commit (prefers uv, then pipx, then brew, then pip)
