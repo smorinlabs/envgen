@@ -1,6 +1,6 @@
 [package]
 name = "envgen"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 description = "Environment file generator CLI — generate .env files from declarative YAML schemas"
 readme = "README.md"
