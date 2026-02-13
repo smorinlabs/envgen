@@ -11,13 +11,16 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
+concurrency:
+  group: release-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref_name }}-${{ inputs.tag || 'none' }}
+  cancel-in-progress: false
 
 jobs:
   meta:
     name: Resolve tag + validate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       version: ${{ steps.version.outputs.version }}
@@ -33,7 +36,7 @@ jobs:
           fi
 
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           ref: ${{ steps.tag.outputs.tag }}
@@ -107,35 +110,37 @@ jobs:
           - ubuntu-latest
           - macos-latest
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           components: rustfmt, clippy
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
 
       - name: Setup Go
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: "1.22.x"
 
       - name: Setup Node
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "20.x"
 
       - name: Setup uv
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        uses: astral-sh/setup-uv@v3
+        uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
 
       - name: Install yamlfmt
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -162,28 +167,40 @@ jobs:
     needs: [meta, verify]
     runs-on: ubuntu-latest
     environment: crates-io
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           toolchain: stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+
+      - name: Authenticate with crates.io (trusted publishing)
+        id: crates-auth
+        uses: rust-lang/crates-io-auth-action@b7e9a28eded4986ec6b1fa40eeee8f8f165559ec # v1
+
+      - name: Verify publish payload (dry run)
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
+        run: cargo publish --dry-run --locked
 
       - name: Publish
         shell: bash
         env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
         run: |
           set -euo pipefail
           if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
-            echo "ERROR: missing CARGO_REGISTRY_TOKEN secret"
+            echo "ERROR: missing temporary crates.io token from trusted publishing"
             exit 1
           fi
 
@@ -204,14 +221,14 @@ jobs:
       contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
           ref: ${{ needs.meta.outputs.tag }}
 
       - name: Generate release notes (git-cliff)
         id: git-cliff
-        uses: orhun/git-cliff-action@v4
+        uses: orhun/git-cliff-action@e16f179f0be49ecdfe63753837f20b9531642772 # v4
         with:
           config: git-cliff.toml
           args: -vv --latest --strip header
@@ -221,7 +238,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: ${{ needs.meta.outputs.tag }}
@@ -238,19 +255,21 @@ jobs:
           - macos-latest
           - windows-latest
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
 
       - name: Setup Rust
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
           toolchain: stable
 
       - name: Rust cache
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
 
       - name: Build
         run: cargo build --release --locked
@@ -276,7 +295,7 @@ jobs:
           "ASSET_PATH=$asset" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
       - name: Upload release asset
-        uses: svenstaro/upload-release-action@v2
+        uses: svenstaro/upload-release-action@6b7fa9f267e90b50a19fef07b3596790bb941741 # v2
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ needs.meta.outputs.tag }}
@@ -288,6 +307,8 @@ jobs:
     name: Open homebrew-core bump PR
     needs: [meta, verify, publish-crates]
     runs-on: macos-latest
+    permissions:
+      contents: read
     env:
       HOMEBREW_GITHUB_API_TOKEN: ${{ secrets.HOMEBREW_GITHUB_API_TOKEN }}
     steps:

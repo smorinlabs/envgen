@@ -4,13 +4,16 @@ pub mod types;
 pub mod validation;
 pub mod validator;
 
-pub const JSON_SCHEMA_FILENAME: &str =
-    concat!("envgen.schema.v", env!("CARGO_PKG_VERSION"), ".json");
+pub const JSON_SCHEMA_FILENAME: &str = concat!(
+    "envgen.schema.v",
+    env!("ENVGEN_SCHEMA_ARTIFACT_VERSION"),
+    ".json"
+);
 
 pub const JSON_SCHEMA: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/schemas/envgen.schema.v",
-    env!("CARGO_PKG_VERSION"),
+    env!("ENVGEN_SCHEMA_ARTIFACT_VERSION"),
     ".json"
 ));
 

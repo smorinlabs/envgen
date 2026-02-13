@@ -54,6 +54,17 @@ jobs:
           UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make check
 
+      - name: Guard publish package contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo package --allow-dirty --list > package-files.txt
+          if grep -E '(^|/)\.uv-cache/|(^|/)\.uv-tools/' package-files.txt >/dev/null; then
+            echo "ERROR: packaged crate includes local uv cache/tool directories" >&2
+            grep -E '(^|/)\.uv-cache/|(^|/)\.uv-tools/' package-files.txt >&2 || true
+            exit 1
+          fi
+
   rust-macos:
     name: Rust (macOS)
     runs-on: macos-latest

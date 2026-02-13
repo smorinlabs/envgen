@@ -244,14 +244,49 @@ validation is implemented via the `jsonschema` crate (Draft 2020-12) on the YAML
 
 ```bash
 envgen schema
-# writes ./envgen.schema.vX.Y.Z.json
+# writes ./envgen.schema.vA.B.C.json
 ```
+
+The schema artifact version (`A.B.C`) is managed independently from the crate version via
+`SCHEMA_VERSION`.
 
 Point the YAML Language Server at it (top of your schema file):
 
 ```yaml
-# yaml-language-server: $schema=./envgen.schema.vX.Y.Z.json
+# yaml-language-server: $schema=./envgen.schema.vA.B.C.json
 ```
+
+## Versioning and Release Model
+
+`envgen` uses two independent release streams:
+
+- Crate version stream:
+  - Version source: `Cargo.toml` (`[package].version`)
+  - Release notes: `CHANGELOG.md`
+  - Tag format: `vX.Y.Z`
+- Schema artifact version stream:
+  - Version source: `SCHEMA_VERSION`
+  - Release notes: `SCHEMA_CHANGELOG.md`
+  - Tag format: `schema-vA.B.C`
+
+These streams are intentionally decoupled. Bumping the crate version does not require a schema
+artifact version bump, and bumping the schema artifact version does not require a crate version
+bump.
+
+Common bump and tag commands:
+
+```bash
+# crate version flow
+make bump-crate-patch
+make tag-crate && make push-tag-crate
+
+# schema artifact version flow
+make bump-schema-patch
+make tag-schema && make push-tag-schema
+```
+
+Full release guide: [`RELEASING.md`](RELEASING.md)  
+Schema artifact release notes: `SCHEMA_CHANGELOG.md`
 
 ## Safety notes
 
@@ -268,7 +303,7 @@ make test
 make fmt
 ```
 
-See `RELEASING.md` for the release process.
+For release operations, bump behavior, and tagging workflow, use [`RELEASING.md`](RELEASING.md) as the source of truth.
 
 ## License
 

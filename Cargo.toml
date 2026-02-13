@@ -10,14 +10,18 @@ keywords = ["dotenv", "env", "yaml", "schema", "cli"]
 categories = ["command-line-utilities", "development-tools"]
 rust-version = "1.85"
 
+# Keep packaging deterministic with a root-anchored allowlist.
+# Note: Cargo ignores `exclude` when `include` is present.
 include = [
-    "src/**",
-    "schemas/**",
-    "Cargo.toml",
-    "Cargo.lock",
-    "README.md",
-    "CHANGELOG.md",
-    "LICENSE",
+    "/src/**",
+    "/schemas/**",
+    "/build.rs",
+    "/SCHEMA_VERSION",
+    "/Cargo.toml",
+    "/Cargo.lock",
+    "/README.md",
+    "/CHANGELOG.md",
+    "/LICENSE",
 ]
 
 [dependencies]

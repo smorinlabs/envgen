@@ -10,7 +10,10 @@ fn envgen() -> Command {
 }
 
 fn schema_filename() -> String {
-    format!("envgen.schema.v{}.json", env!("CARGO_PKG_VERSION"))
+    format!(
+        "envgen.schema.v{}.json",
+        env!("ENVGEN_SCHEMA_ARTIFACT_VERSION")
+    )
 }
 
 fn fixture_content() -> String {
@@ -22,7 +25,7 @@ fn fixture_content() -> String {
 
 #[test]
 fn test_schema_stdout_prints_schema() {
-    let envgen_version = env!("CARGO_PKG_VERSION");
+    let schema_artifact_version = env!("ENVGEN_SCHEMA_ARTIFACT_VERSION");
     envgen()
         .arg("schema")
         .arg("--output")
@@ -32,7 +35,7 @@ fn test_schema_stdout_prints_schema() {
         .stdout(predicate::str::contains("\"$schema\""))
         .stdout(predicate::str::contains("envgen YAML schema"))
         .stdout(predicate::str::contains("\"x-envgen-schema-version\""))
-        .stdout(predicate::str::contains(envgen_version));
+        .stdout(predicate::str::contains(schema_artifact_version));
 }
 
 #[test]

@@ -16,8 +16,9 @@ YAMLFMT_VERSION ?= v0.15.0
 ACTIONLINT ?= actionlint
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
-CARGO_VERSION := $(shell python3 -c "import tomllib; print(tomllib.load(open('Cargo.toml','rb'))['package']['version'])")
-SCHEMA_FILE := schemas/envgen.schema.v$(CARGO_VERSION).json
+SCHEMA_ARTIFACT_VERSION := $(shell tr -d '\r\n' < SCHEMA_VERSION)
+SCHEMA_FILE := schemas/envgen.schema.v$(SCHEMA_ARTIFACT_VERSION).json
+VERSION_BUMP_SCRIPT := scripts/version_bump.py
 
 # ─── Build & Test ────────────────────────────────────────────────
 
@@ -39,6 +40,7 @@ check: check-tools check-code test check-yaml-fixtures check-schema ## Run all c
 .PHONY: check-tools
 check-tools: ## Verify required tooling is installed
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
+	@command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found. Install Python 3."; exit 1; }
 	@cargo fmt --version >/dev/null 2>&1 || { echo "ERROR: rustfmt not found. Run: make install-rust-tools (or rustup component add rustfmt)"; exit 1; }
 	@cargo clippy --version >/dev/null 2>&1 || { echo "ERROR: clippy not found. Run: make install-rust-tools (or rustup component add clippy)"; exit 1; }
 	@command -v cargo-audit >/dev/null 2>&1 || { echo "ERROR: cargo-audit not found. Run: make install-cargo-tools (or cargo install cargo-audit)"; exit 1; }
@@ -196,6 +198,75 @@ check-schema-meta: ## Layer 2: Meta-schema validation (Draft 2020-12)
 fmt-schema: ## Auto-format the schema file (Biome)
 	@echo "Formatting schema (Biome)... (first run may download the tool)"
 	$(BIOME) format --write $(SCHEMA_FILE)
+
+# ─── Versioning & Tagging ───────────────────────────────────────
+
+.PHONY: version-status
+version-status: ## Show crate/schema versions and expected schema file
+	python3 $(VERSION_BUMP_SCRIPT) status
+
+.PHONY: bump-crate
+bump-crate: ## Bump crate version + CHANGELOG.md (LEVEL=patch|minor|major or VERSION=X.Y.Z)
+	python3 $(VERSION_BUMP_SCRIPT) bump-crate $(if $(LEVEL),--level $(LEVEL),) $(if $(VERSION),--version $(VERSION),) $(if $(ALLOW_EMPTY_CHANGELOG),--allow-empty-changelog,) $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: bump-crate-patch
+bump-crate-patch: ## Convenience crate patch bump
+	$(MAKE) bump-crate LEVEL=patch $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-crate-minor
+bump-crate-minor: ## Convenience crate minor bump
+	$(MAKE) bump-crate LEVEL=minor $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-crate-major
+bump-crate-major: ## Convenience crate major bump
+	$(MAKE) bump-crate LEVEL=major $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-schema
+bump-schema: ## Bump schema version + SCHEMA_CHANGELOG.md (LEVEL=patch|minor|major or VERSION=A.B.C)
+	python3 $(VERSION_BUMP_SCRIPT) bump-schema $(if $(LEVEL),--level $(LEVEL),) $(if $(VERSION),--version $(VERSION),) $(if $(ALLOW_EMPTY_SCHEMA_CHANGELOG),--allow-empty-changelog,) $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: bump-schema-patch
+bump-schema-patch: ## Convenience schema patch bump
+	$(MAKE) bump-schema LEVEL=patch $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-schema-minor
+bump-schema-minor: ## Convenience schema minor bump
+	$(MAKE) bump-schema LEVEL=minor $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-schema-major
+bump-schema-major: ## Convenience schema major bump
+	$(MAKE) bump-schema LEVEL=major $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+
+.PHONY: bump-dry-run
+bump-dry-run: ## Dry-run bump (MODE=crate|schema; plus LEVEL=... or VERSION=...)
+	@if [ -z "$(MODE)" ]; then \
+		echo "ERROR: MODE is required (crate|schema)"; \
+		exit 1; \
+	fi
+	@if [ "$(MODE)" = "crate" ]; then \
+		python3 $(VERSION_BUMP_SCRIPT) bump-crate $(if $(LEVEL),--level $(LEVEL),) $(if $(VERSION),--version $(VERSION),) $(if $(ALLOW_EMPTY_CHANGELOG),--allow-empty-changelog,) --dry-run; \
+	elif [ "$(MODE)" = "schema" ]; then \
+		python3 $(VERSION_BUMP_SCRIPT) bump-schema $(if $(LEVEL),--level $(LEVEL),) $(if $(VERSION),--version $(VERSION),) $(if $(ALLOW_EMPTY_SCHEMA_CHANGELOG),--allow-empty-changelog,) --dry-run; \
+	else \
+		echo "ERROR: MODE must be crate or schema"; \
+		exit 1; \
+	fi
+
+.PHONY: tag-crate
+tag-crate: ## Create local crate tag vX.Y.Z (VERSION can override file-derived value)
+	VERSION="$(VERSION)" python3 $(VERSION_BUMP_SCRIPT) tag-crate $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: push-tag-crate
+push-tag-crate: ## Push crate tag vX.Y.Z to origin (VERSION can override file-derived value)
+	VERSION="$(VERSION)" python3 $(VERSION_BUMP_SCRIPT) push-tag-crate $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: tag-schema
+tag-schema: ## Create local schema tag schema-vA.B.C (SCHEMA_VERSION can override file-derived value)
+	SCHEMA_VERSION="$(SCHEMA_VERSION)" python3 $(VERSION_BUMP_SCRIPT) tag-schema $(if $(DRY_RUN),--dry-run,)
+
+.PHONY: push-tag-schema
+push-tag-schema: ## Push schema tag schema-vA.B.C to origin (SCHEMA_VERSION can override file-derived value)
+	SCHEMA_VERSION="$(SCHEMA_VERSION)" python3 $(VERSION_BUMP_SCRIPT) push-tag-schema $(if $(DRY_RUN),--dry-run,)
 
 # ─── Commit Message ──────────────────────────────────────────────
 
