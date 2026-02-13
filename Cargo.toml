@@ -1,6 +1,6 @@
 [package]
 name = "envgen"
-version = "0.1.0"
+version = "0.2.1"
 edition = "2021"
 description = "Environment file generator CLI — generate .env files from declarative YAML schemas"
 readme = "README.md"
@@ -8,7 +8,7 @@ repository = "https://github.com/smorinlabs/envgen"
 license = "MIT"
 keywords = ["dotenv", "env", "yaml", "schema", "cli"]
 categories = ["command-line-utilities", "development-tools"]
-rust-version = "1.85"
+rust-version = "1.88"
 
 # Keep packaging deterministic with a root-anchored allowlist.
 # Note: Cargo ignores `exclude` when `include` is present.
@@ -33,7 +33,7 @@ jsonschema = { version = "0.18", features = ["draft202012"] }
 tokio = { version = "1", features = ["full"] }
 chrono = "0.4"
 comfy-table = "=7.1.0"  # Pin to avoid edition2024 requirement
-time = "=0.3.36"  # Pin to avoid MSRV 1.88.0 requirement in newer versions
+time = "=0.3.47"  # Pin to patched release for RUSTSEC-2026-0009 (requires rust-version 1.88)
 dialoguer = "0.11"
 colored = "2"
 anyhow = "1"

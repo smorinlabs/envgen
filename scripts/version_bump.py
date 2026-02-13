@@ -119,7 +119,10 @@ def update_cargo_version(new_version: str, dry_run: bool) -> tuple[str, str]:
         stripped = lines[index].strip()
         if stripped.startswith("[") and stripped.endswith("]"):
             break
-        match = re.match(r'^(\s*version\s*=\s*")([^"]+)(".*)$', lines[index])
+        match = re.match(
+            r'^(\s*version\s*=\s*")([^"]+)(".*?)(\r?\n?)$',
+            lines[index],
+        )
         if match:
             version_index = index
             version_match = match
@@ -129,8 +132,13 @@ def update_cargo_version(new_version: str, dry_run: bool) -> tuple[str, str]:
 
     lines[version_index] = (
         f"{version_match.group(1)}{new_version}{version_match.group(3)}"
+        f"{version_match.group(4)}"
     )
     updated = "".join(lines)
+    try:
+        tomllib.loads(updated)
+    except tomllib.TOMLDecodeError as exc:
+        fail(f"Generated invalid Cargo.toml while updating version: {exc}")
 
     if dry_run:
         print(f"[dry-run] update {CARGO_TOML} version {old_version} -> {new_version}")

@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.1] - 2026-02-13
+
+### Added
+
+### Changed
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
+## [0.2.0] - 2026-02-13
+
+### Added
+
 - `envgen readme` subcommand (prints the embedded `README.md` to stdout)
 
 ### Changed
@@ -27,3 +55,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Static `values` templates now expand `{key}` to the variable’s effective `source_key` (consistent with command/manual sources).
 
 ### Security
+

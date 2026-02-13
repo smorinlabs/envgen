@@ -133,9 +133,15 @@ install: ## Install envgen to ~/.cargo/bin
 
 # ─── Pre-commit ────────────────────────────────────────────────
 
-.PHONY: pre-commit-setup
+.PHONY: pre-commit-setup pre-commit-staged pre-commit-all
 pre-commit-setup: check-tools ## Install git pre-commit hook
 	pre-commit install
+
+pre-commit-staged: check-tools ## Run pre-commit hooks on staged files
+	pre-commit run
+
+pre-commit-all: check-tools ## Run pre-commit hooks on all files
+	pre-commit run --all-files
 
 # ─── GitHub Actions Lint ────────────────────────────────────────
 

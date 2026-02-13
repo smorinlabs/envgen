@@ -1,6 +1,11 @@
 repos:
   - repo: local
     hooks:
+      - id: cargo-metadata
+        name: cargo metadata --no-deps
+        entry: cargo metadata --no-deps --format-version=1
+        language: system
+        pass_filenames: false
       - id: cargo-fmt
         name: cargo fmt --all
         entry: cargo fmt --all
