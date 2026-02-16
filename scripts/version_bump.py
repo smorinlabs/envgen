@@ -54,6 +54,7 @@ NEXT_STEP_STAGES = (
 RELEASE_WORKFLOW_URL = (
     "https://github.com/smorinlabs/envgen/actions/workflows/release.yml"
 )
+LOCKFILE_SYNC_ARGS = ["cargo", "+1.88.0", "generate-lockfile"]
 
 
 class BumpError(RuntimeError):
@@ -99,12 +100,19 @@ def render_next_step(
     crate_version: str | None = None,
     schema_version: str | None = None,
     tag_name: str | None = None,
+    lockfile_synced: bool | None = None,
 ) -> tuple[str, list[str]]:
     if stage == "crate-after-bump":
         resolved_crate_version = crate_version or read_cargo_version()
+        lines: list[str] = []
+        if lockfile_synced is True:
+            lines.append("Cargo.lock synchronized for locked checks.")
+        elif lockfile_synced is False:
+            lines.append("Cargo.lock sync runs only in non-dry-run bump mode.")
+        lines.append("$ make check-release")
         return (
             f"Crate release prep updated to v{resolved_crate_version}.",
-            ["$ make check-release"],
+            lines,
         )
 
     if stage == "crate-after-check-release":
@@ -186,6 +194,7 @@ def emit_next_step(
     crate_version: str | None = None,
     schema_version: str | None = None,
     tag_name: str | None = None,
+    lockfile_synced: bool | None = None,
 ) -> None:
     if not hints_enabled():
         return
@@ -195,6 +204,7 @@ def emit_next_step(
         crate_version=crate_version,
         schema_version=schema_version,
         tag_name=tag_name,
+        lockfile_synced=lockfile_synced,
     )
     print("")
     print(f"Hint: {summary}")
@@ -349,6 +359,7 @@ def rotate_changelog(
     default_sections: list[str],
     allow_empty: bool,
     dry_run: bool,
+    make_override_command: str | None = None,
 ) -> None:
     text = path.read_text(encoding="utf-8")
     match = UNRELEASED_RE.search(text)
@@ -361,10 +372,13 @@ def rotate_changelog(
         headings = default_sections
 
     if not changelog_has_entries(body) and not allow_empty:
-        fail(
-            f"Unreleased section in {path} has no entries. "
-            "Use --allow-empty-changelog to override."
-        )
+        if make_override_command:
+            fail(
+                f"Unreleased section in {path} has no entries.\n"
+                "Override from Make target:\n"
+                f"  {make_override_command}"
+            )
+        fail(f"Unreleased section in {path} has no entries.")
 
     unreleased_block = "## [Unreleased]\n\n"
     unreleased_block += "".join(f"### {heading}\n\n" for heading in headings)
@@ -427,6 +441,20 @@ def run_git_command(args: list[str], dry_run: bool) -> None:
         fail(f"Command failed: {quoted}")
 
 
+def sync_cargo_lockfile(dry_run: bool) -> None:
+    command = shlex.join(LOCKFILE_SYNC_ARGS)
+    if dry_run:
+        print(f"[dry-run] would run: {command}")
+        return
+
+    result = subprocess.run(LOCKFILE_SYNC_ARGS, cwd=ROOT, check=False)
+    if result.returncode != 0:
+        fail(
+            "Failed to synchronize Cargo.lock after crate version bump.\n"
+            "Run: make sync-lockfile"
+        )
+
+
 def create_tag(tag_name: str, message: str, dry_run: bool) -> None:
     if local_tag_exists(tag_name):
         fail(f"Local tag already exists: {tag_name}")
@@ -485,6 +513,17 @@ def do_status(_args: argparse.Namespace) -> None:
 
 
 def do_bump_crate(args: argparse.Namespace) -> None:
+    if args.level:
+        make_override_command = (
+            f"make bump-crate-{args.level} ALLOW_EMPTY_CHANGELOG=1"
+        )
+    elif args.version:
+        make_override_command = (
+            f"make bump-crate VERSION={args.version} ALLOW_EMPTY_CHANGELOG=1"
+        )
+    else:
+        make_override_command = "make bump-crate ALLOW_EMPTY_CHANGELOG=1"
+
     old, new = update_cargo_version(
         resolve_next_version(read_cargo_version(), args.level, args.version),
         dry_run=args.dry_run,
@@ -496,15 +535,36 @@ def do_bump_crate(args: argparse.Namespace) -> None:
         default_sections=CRATE_SECTIONS,
         allow_empty=args.allow_empty_changelog,
         dry_run=args.dry_run,
+        make_override_command=make_override_command,
     )
+
+    sync_cargo_lockfile(args.dry_run)
 
     print(f"crate version: {old} -> {new}")
     print(f"updated: {CARGO_TOML}")
     print(f"updated: {CHANGELOG}")
-    emit_next_step("crate-after-bump", crate_version=new)
+    if not args.dry_run:
+        print(f"updated: {ROOT / 'Cargo.lock'}")
+    emit_next_step(
+        "crate-after-bump",
+        crate_version=new,
+        lockfile_synced=not args.dry_run,
+    )
 
 
 def do_bump_schema(args: argparse.Namespace) -> None:
+    if args.level:
+        make_override_command = (
+            f"make bump-schema-{args.level} ALLOW_EMPTY_SCHEMA_CHANGELOG=1"
+        )
+    elif args.version:
+        make_override_command = (
+            f"make bump-schema VERSION={args.version} "
+            "ALLOW_EMPTY_SCHEMA_CHANGELOG=1"
+        )
+    else:
+        make_override_command = "make bump-schema ALLOW_EMPTY_SCHEMA_CHANGELOG=1"
+
     old = read_schema_version_file()
     new = resolve_next_version(old, args.level, args.version)
     if old == new:
@@ -529,6 +589,7 @@ def do_bump_schema(args: argparse.Namespace) -> None:
         default_sections=SCHEMA_SECTIONS,
         allow_empty=args.allow_empty_changelog,
         dry_run=args.dry_run,
+        make_override_command=make_override_command,
     )
 
     if args.dry_run:

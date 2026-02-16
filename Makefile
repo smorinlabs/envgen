@@ -171,9 +171,28 @@ check-security: check-tools-security ## Security/dependency checks
 	cargo machete
 	typos
 
+.PHONY: sync-lockfile
+sync-lockfile: ## Regenerate Cargo.lock using pinned Rust toolchain (1.88.0)
+	cargo +1.88.0 generate-lockfile
+
+.PHONY: check-lockfile
+check-lockfile: ## Validate lockfile parity using pinned Rust toolchain (1.88.0)
+	cargo +1.88.0 check --locked
+
 .PHONY: check-release
 check-release: ## Release readiness checks
-	ENVGEN_HINTS=0 $(MAKE) check-core
+	@tmp_file="$$(mktemp)"; \
+	trap 'rm -f "$$tmp_file"' EXIT; \
+	if ENVGEN_HINTS=0 $(MAKE) check-core > "$$tmp_file" 2>&1; then \
+		cat "$$tmp_file"; \
+	else \
+		rc=$$?; \
+		cat "$$tmp_file"; \
+		if grep -E 'lock file .* needs to be updated but --locked was passed' "$$tmp_file" >/dev/null; then \
+			echo "ERROR: lockfile is out of sync with Cargo.toml. Run: make sync-lockfile" >&2; \
+		fi; \
+		exit $$rc; \
+	fi
 	cargo publish --dry-run --locked --allow-dirty
 	@python3 $(VERSION_BUMP_SCRIPT) status | awk -F= '/^crate_version=/{print "✓ Release readiness checks passed for crate v"$$2}'
 	@python3 $(VERSION_BUMP_SCRIPT) next-step --stage crate-after-check-release

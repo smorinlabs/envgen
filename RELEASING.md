@@ -39,6 +39,8 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make check-msrv`
 - `make check-security`
 - `make check-release`
+- `make sync-lockfile`
+- `make check-lockfile`
 - `make precommit-fast`
 - `make prepush-full`
 - `make bump-crate LEVEL=patch|minor|major`
@@ -194,6 +196,7 @@ make bump-dry-run MODE=schema VERSION=A.B.C
    - `make bump-dry-run MODE=crate LEVEL=patch`
 3. Apply the crate bump:
    - `make bump-crate LEVEL=patch` (or `VERSION=X.Y.Z`)
+   - This updates `Cargo.toml`, `CHANGELOG.md`, and synchronizes `Cargo.lock`.
 4. Validate:
    - `make check-release`
 5. Commit release prep (recommended):
@@ -238,6 +241,15 @@ Pushing `schema-v*.*.*` tags does not trigger crates.io publish.
 - Missing local tag on push:
   - `make push-tag-crate` fails if `vX.Y.Z` has not been created locally.
   - `make push-tag-schema` fails if `schema-vA.B.C` has not been created locally.
+- Empty `Unreleased` section during bump:
+  - Crate override: `make bump-crate-patch ALLOW_EMPTY_CHANGELOG=1`
+  - Schema override: `make bump-schema-patch ALLOW_EMPTY_SCHEMA_CHANGELOG=1`
+- Lockfile mismatch during locked checks:
+  - Symptom: `Cargo.lock needs to be updated but --locked was passed`
+  - Fix: `make sync-lockfile`
+- Partial update on bump failure:
+  - A failed bump can leave version/changelog edits before later steps complete.
+  - Recovery: run `make sync-lockfile` and retry the bump after fixing the reported error.
 
 ## Emergency fallback (temporary)
 
