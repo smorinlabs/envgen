@@ -11,7 +11,7 @@ Generate `.env` files from a declarative YAML schema.
 - **Safe defaults**: won’t overwrite existing files without `--force`
 - **Tooling-friendly**: list variables, validate schemas, export a JSON Schema for editor autocomplete
 
-**Status:** pre-1.0 (`v0.x`). The CLI and schema may change between minor versions.
+**Status:** stable (`v1.x`) as of `v1.0.0`. Breaking changes follow semantic versioning major releases.
 
 ## Demo
 

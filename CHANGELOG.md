@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [1.0.0] - 2026-02-16
+
+### Added
+
+### Changed
+
+- Stabilized the project for the `1.0.0` release and updated README status to `v1.x`.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [0.3.8] - 2026-02-16
 
 ### Added

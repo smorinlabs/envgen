@@ -1,6 +1,6 @@
 [package]
 name = "envgen"
-version = "0.3.8"
+version = "1.0.0"
 edition = "2021"
 description = "Generate and validate .env files from one spec - self-documenting config, consistent across environments, secrets stay out of git."
 readme = "README.md"
