@@ -19,6 +19,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [1.0.3] - 2026-02-16
+
+### Added
+
+### Changed
+
+- Hardened release automation to prefer `rustup run 1.88.0 cargo ...` with fallback for lockfile sync/check commands.
+- Added explicit Homebrew tap token reset guidance and fail-fast workflow diagnostics for token/permission failures.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [1.0.2] - 2026-02-16
 
 ### Added
