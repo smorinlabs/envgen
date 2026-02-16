@@ -26,6 +26,7 @@ jobs:
       HOMEBREW_TAP_REPO: smorinlabs/homebrew-tap
       TAP_REPO_DIR: ${{ github.workspace }}/homebrew-tap
       HOMEBREW_SOURCE_JSON: ${{ github.workspace }}/.homebrew/source.json
+      HOMEBREW_TOKEN_DOC_SECTION: "RELEASING.md -> Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)"
     steps:
       - name: Resolve tag
         id: tag
@@ -64,6 +65,73 @@ jobs:
             TAG="${{ steps.tag.outputs.tag }}" \
             HOMEBREW_SOURCE_JSON="$HOMEBREW_SOURCE_JSON"
 
+      - name: Validate tap token permissions
+        shell: bash
+        env:
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          if [[ -z "${HOMEBREW_TAP_GITHUB_TOKEN}" ]]; then
+            echo "::error::Missing secret HOMEBREW_TAP_GITHUB_TOKEN."
+            echo "::error::Fix by following: ${HOMEBREW_TOKEN_DOC_SECTION}"
+            exit 1
+          fi
+
+          API_URL="https://api.github.com/repos/${HOMEBREW_TAP_REPO}"
+          HTTP_CODE="$(curl -sS -o /tmp/homebrew-tap-repo.json -w "%{http_code}" \
+            -H "Authorization: Bearer ${HOMEBREW_TAP_GITHUB_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            "${API_URL}")"
+
+          python3 - "${HTTP_CODE}" <<'PY'
+          import json
+          import os
+          import sys
+
+          code = int(sys.argv[1])
+          repo = os.environ["HOMEBREW_TAP_REPO"]
+          doc = os.environ["HOMEBREW_TOKEN_DOC_SECTION"]
+          payload_path = "/tmp/homebrew-tap-repo.json"
+
+          payload = {}
+          try:
+              with open(payload_path, "r", encoding="utf-8") as fh:
+                  payload = json.load(fh)
+          except Exception:
+              payload = {}
+
+          def emit_error(message: str) -> None:
+              print(f"::error::{message}")
+
+          if code != 200:
+              emit_error(
+                  f"HOMEBREW_TAP_GITHUB_TOKEN cannot access {repo} (GitHub API HTTP {code})."
+              )
+              emit_error(
+                  "Expected fine-grained token scope: repo access to smorinlabs/homebrew-tap with "
+                  "Contents: Read and write and Pull requests: Read and write."
+              )
+              emit_error(f"Fix by following: {doc}")
+              gh_message = payload.get("message")
+              if gh_message:
+                  emit_error(f"GitHub response: {gh_message}")
+              raise SystemExit(1)
+
+          permissions = payload.get("permissions") or {}
+          if permissions and not permissions.get("push", False):
+              emit_error(
+                  f"HOMEBREW_TAP_GITHUB_TOKEN can read {repo} but cannot push "
+                  "(permissions.push=false)."
+              )
+              emit_error(
+                  "Expected fine-grained token scope: Contents: Read and write and "
+                  "Pull requests: Read and write."
+              )
+              emit_error(f"Fix by following: {doc}")
+              raise SystemExit(1)
+
+          print(f"Token validation passed for {repo}.")
+          PY
+
       - name: Checkout tap repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
@@ -95,7 +163,16 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
         run: |
+          set +e
           make homebrew-open-tap-pr \
             TAG="${{ steps.tag.outputs.tag }}" \
             TAP_REPO_DIR="$TAP_REPO_DIR" \
             HOMEBREW_TAP_REPO="$HOMEBREW_TAP_REPO"
+          RC="$?"
+          set -e
+
+          if [[ "$RC" -ne 0 ]]; then
+            echo "::error::Failed to open/update tap PR. This can happen when HOMEBREW_TAP_GITHUB_TOKEN is expired or missing repo permissions."
+            echo "::error::Fix by following: ${HOMEBREW_TOKEN_DOC_SECTION}"
+            exit "$RC"
+          fi

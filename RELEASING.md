@@ -293,6 +293,39 @@ Automation equivalent:
 
 - `.github/workflows/homebrew-tap-pr.yml` runs on `release.published` and can be retried with `workflow_dispatch`.
 
+## Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)
+
+Use a fine-grained PAT for this (this is `HOMEBREW_TAP_GITHUB_TOKEN`, not `HOMEBREW_GITHUB_API_TOKEN`).
+
+1. Go to GitHub: Profile photo -> `Settings` -> `Developer settings` -> `Personal access tokens` -> `Fine-grained tokens` -> `Generate new token`.
+2. Set:
+   - `Resource owner`: `smorinlabs`
+   - `Repository access`: `Only select repositories`
+   - Select repo: `smorinlabs/homebrew-tap`
+3. Under **Repository permissions**, set:
+   - `Contents`: `Read and write`
+   - `Pull requests`: `Read and write`
+4. Set expiration (recommended: short, e.g. 90 days), then click `Generate token`.
+5. Copy the token immediately (you won’t be able to view it again).
+6. If GitHub shows token status `pending` (org approval enabled), approve it in org token settings.
+7. Add it to `smorinlabs/envgen` secrets:
+   - Repo -> `Settings` -> `Secrets and variables` -> `Actions` -> `New repository secret`
+   - Name: `HOMEBREW_TAP_GITHUB_TOKEN`
+   - Value: token from step 5
+8. Test it:
+   - `gh workflow run homebrew-tap-pr.yml -R smorinlabs/envgen -f tag=v1.0.1`
+
+CLI shortcut for step 7:
+
+```bash
+printf %s "$TOKEN" | gh secret set HOMEBREW_TAP_GITHUB_TOKEN -R smorinlabs/envgen
+```
+
+Docs:
+
+- [Managing personal access tokens](https://docs.github.com/enterprise-cloud@latest/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)
+- [Fine-grained PAT permission model](https://docs.github.com/en/rest/overview/permissions-required-for-fine-grained-personal-access-tokens)
+
 ## Failure modes
 
 - Missing release section for tagging:
@@ -313,6 +346,9 @@ Automation equivalent:
 - Partial update on bump failure:
   - A failed bump can leave version/changelog edits before later steps complete.
   - Recovery: run `make sync-lockfile` and retry the bump after fixing the reported error.
+- Homebrew tap token auth/permission errors:
+  - Symptom: workflow step `Validate tap token permissions` fails with `::error::` output.
+  - Fix: follow `Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)` in this document.
 
 ## Emergency fallback (temporary)
 
