@@ -12,6 +12,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -54,7 +55,7 @@ NEXT_STEP_STAGES = (
 RELEASE_WORKFLOW_URL = (
     "https://github.com/smorinlabs/envgen/actions/workflows/release.yml"
 )
-LOCKFILE_SYNC_ARGS = ["cargo", "+1.88.0", "generate-lockfile"]
+PINNED_RUST_TOOLCHAIN = "1.88.0"
 
 
 class BumpError(RuntimeError):
@@ -441,18 +442,62 @@ def run_git_command(args: list[str], dry_run: bool) -> None:
         fail(f"Command failed: {quoted}")
 
 
+def lockfile_sync_command_candidates() -> list[list[str]]:
+    commands: list[list[str]] = []
+    if shutil.which("rustup"):
+        commands.append(
+            ["rustup", "run", PINNED_RUST_TOOLCHAIN, "cargo", "generate-lockfile"]
+        )
+
+    if shutil.which("cargo"):
+        commands.append(["cargo", f"+{PINNED_RUST_TOOLCHAIN}", "generate-lockfile"])
+
+    if not commands:
+        fail(
+            "Could not find rustup or cargo to synchronize Cargo.lock.\n"
+            "Install Rust and rerun: make sync-lockfile"
+        )
+
+    # Keep deterministic attempt order while removing accidental duplicates.
+    deduped: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for command in commands:
+        key = tuple(command)
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(command)
+    return deduped
+
+
 def sync_cargo_lockfile(dry_run: bool) -> None:
-    command = shlex.join(LOCKFILE_SYNC_ARGS)
+    commands = lockfile_sync_command_candidates()
+    command = shlex.join(commands[0])
     if dry_run:
         print(f"[dry-run] would run: {command}")
+        if len(commands) > 1:
+            print(f"[dry-run] fallback command: {shlex.join(commands[1])}")
         return
 
-    result = subprocess.run(LOCKFILE_SYNC_ARGS, cwd=ROOT, check=False)
-    if result.returncode != 0:
-        fail(
-            "Failed to synchronize Cargo.lock after crate version bump.\n"
-            "Run: make sync-lockfile"
-        )
+    failures: list[str] = []
+    for index, args in enumerate(commands):
+        quoted = shlex.join(args)
+        if index > 0:
+            print(
+                f"WARNING: lockfile sync failed; retrying with fallback: {quoted}",
+                file=sys.stderr,
+            )
+
+        result = subprocess.run(args, cwd=ROOT, check=False)
+        if result.returncode == 0:
+            return
+        failures.append(f"{quoted} (exit {result.returncode})")
+
+    fail(
+        "Failed to synchronize Cargo.lock after crate version bump.\n"
+        f"Tried:\n  - {'\n  - '.join(failures)}\n"
+        "Run: make sync-lockfile"
+    )
 
 
 def create_tag(tag_name: str, message: str, dry_run: bool) -> None:

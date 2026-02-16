@@ -20,6 +20,7 @@ YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name 
 SCHEMA_ARTIFACT_VERSION := $(shell tr -d '\r\n' < SCHEMA_VERSION)
 SCHEMA_FILE := schemas/envgen.schema.v$(SCHEMA_ARTIFACT_VERSION).json
 VERSION_BUMP_SCRIPT := scripts/version_bump.py
+RUST_TOOLCHAIN_PIN ?= 1.88.0
 HOMEBREW_TAP_SCRIPT := scripts/homebrew/tap_release.py
 HOMEBREW_SOURCE_REPO ?= smorinlabs/envgen
 HOMEBREW_TAP_REPO ?= smorinlabs/homebrew-tap
@@ -180,11 +181,19 @@ check-security: check-tools-security ## Security/dependency checks
 
 .PHONY: sync-lockfile
 sync-lockfile: ## Regenerate Cargo.lock using pinned Rust toolchain (1.88.0)
-	cargo +1.88.0 generate-lockfile
+	@if command -v rustup >/dev/null 2>&1; then \
+		rustup run $(RUST_TOOLCHAIN_PIN) cargo generate-lockfile && exit 0; \
+		echo "WARN: rustup run $(RUST_TOOLCHAIN_PIN) cargo generate-lockfile failed; retrying with cargo +$(RUST_TOOLCHAIN_PIN)." >&2; \
+	fi; \
+	cargo +$(RUST_TOOLCHAIN_PIN) generate-lockfile
 
 .PHONY: check-lockfile
 check-lockfile: ## Validate lockfile parity using pinned Rust toolchain (1.88.0)
-	cargo +1.88.0 check --locked
+	@if command -v rustup >/dev/null 2>&1; then \
+		rustup run $(RUST_TOOLCHAIN_PIN) cargo check --locked && exit 0; \
+		echo "WARN: rustup run $(RUST_TOOLCHAIN_PIN) cargo check --locked failed; retrying with cargo +$(RUST_TOOLCHAIN_PIN)." >&2; \
+	fi; \
+	cargo +$(RUST_TOOLCHAIN_PIN) check --locked
 
 .PHONY: check-release
 check-release: ## Release readiness checks
