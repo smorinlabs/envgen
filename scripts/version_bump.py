@@ -37,6 +37,24 @@ SCHEMA_SECTIONS = [
     "Compatibility",
 ]
 
+TRUTHY_ENV_VALUES = {"1", "true", "yes", "on"}
+FALSY_ENV_VALUES = {"", "0", "false", "no", "off"}
+
+NEXT_STEP_STAGES = (
+    "crate-after-bump",
+    "crate-after-check-release",
+    "crate-after-tag",
+    "crate-after-push-tag",
+    "schema-after-bump",
+    "schema-after-check-schema",
+    "schema-after-tag",
+    "schema-after-push-tag",
+)
+
+RELEASE_WORKFLOW_URL = (
+    "https://github.com/smorinlabs/envgen/actions/workflows/release.yml"
+)
+
 
 class BumpError(RuntimeError):
     """Raised when the bump flow should fail with a user-facing error."""
@@ -44,6 +62,145 @@ class BumpError(RuntimeError):
 
 def fail(message: str) -> None:
     raise BumpError(message)
+
+
+def env_var_truthy(name: str) -> bool:
+    value = os.environ.get(name)
+    if value is None:
+        return False
+    return value.strip().lower() not in FALSY_ENV_VALUES
+
+
+def parse_hint_override() -> bool | None:
+    value = os.environ.get("ENVGEN_HINTS")
+    if value is None:
+        return None
+
+    normalized = value.strip().lower()
+    if normalized in TRUTHY_ENV_VALUES:
+        return True
+    if normalized in FALSY_ENV_VALUES:
+        return False
+    return None
+
+
+def hints_enabled() -> bool:
+    override = parse_hint_override()
+    if override is not None:
+        return override
+    if env_var_truthy("CI"):
+        return False
+    return sys.stdout.isatty()
+
+
+def render_next_step(
+    stage: str,
+    *,
+    crate_version: str | None = None,
+    schema_version: str | None = None,
+    tag_name: str | None = None,
+) -> tuple[str, list[str]]:
+    if stage == "crate-after-bump":
+        resolved_crate_version = crate_version or read_cargo_version()
+        return (
+            f"Crate release prep updated to v{resolved_crate_version}.",
+            ["$ make check-release"],
+        )
+
+    if stage == "crate-after-check-release":
+        resolved_crate_version = crate_version or read_cargo_version()
+        return (
+            f"Release readiness checks passed for crate v{resolved_crate_version}.",
+            [
+                "$ git add Cargo.toml Cargo.lock CHANGELOG.md",
+                f'$ git commit -m "chore(release): bump crate to v{resolved_crate_version}"',
+                "$ git push origin main",
+                "$ make tag-crate",
+            ],
+        )
+
+    if stage == "crate-after-tag":
+        resolved_crate_version = crate_version or read_cargo_version()
+        resolved_tag_name = tag_name or f"v{resolved_crate_version}"
+        return (
+            f"Local crate tag created: {resolved_tag_name}.",
+            ["$ make push-tag-crate"],
+        )
+
+    if stage == "crate-after-push-tag":
+        resolved_crate_version = crate_version or read_cargo_version()
+        resolved_tag_name = tag_name or f"v{resolved_crate_version}"
+        return (
+            f"Crate tag pushed to origin: {resolved_tag_name}.",
+            [
+                "Release workflow should trigger automatically from this tag push.",
+                f"Monitor: {RELEASE_WORKFLOW_URL}",
+            ],
+        )
+
+    if stage == "schema-after-bump":
+        resolved_schema_version = schema_version or read_schema_version_file()
+        return (
+            f"Schema release prep updated to v{resolved_schema_version}.",
+            ["$ make check-schema"],
+        )
+
+    if stage == "schema-after-check-schema":
+        resolved_schema_version = schema_version or read_schema_version_file()
+        schema_file = f"schemas/envgen.schema.v{resolved_schema_version}.json"
+        return (
+            f"Schema checks passed for artifact v{resolved_schema_version}.",
+            [
+                f"$ git add SCHEMA_VERSION SCHEMA_CHANGELOG.md {schema_file}",
+                f'$ git commit -m "chore(schema): schema-v{resolved_schema_version}"',
+                "$ git push origin main",
+                "$ make tag-schema",
+            ],
+        )
+
+    if stage == "schema-after-tag":
+        resolved_schema_version = schema_version or read_schema_version_file()
+        resolved_tag_name = tag_name or f"schema-v{resolved_schema_version}"
+        return (
+            f"Local schema tag created: {resolved_tag_name}.",
+            ["$ make push-tag-schema"],
+        )
+
+    if stage == "schema-after-push-tag":
+        resolved_schema_version = schema_version or read_schema_version_file()
+        resolved_tag_name = tag_name or f"schema-v{resolved_schema_version}"
+        return (
+            f"Schema tag pushed to origin: {resolved_tag_name}.",
+            [
+                "Schema tag pushes do not trigger crates.io publishing.",
+                "Create and push a crate tag (vX.Y.Z) when you want a crate release.",
+            ],
+        )
+
+    fail(f"Unsupported next-step stage: {stage}")
+
+
+def emit_next_step(
+    stage: str,
+    *,
+    crate_version: str | None = None,
+    schema_version: str | None = None,
+    tag_name: str | None = None,
+) -> None:
+    if not hints_enabled():
+        return
+
+    summary, lines = render_next_step(
+        stage,
+        crate_version=crate_version,
+        schema_version=schema_version,
+        tag_name=tag_name,
+    )
+    print("")
+    print(f"Hint: {summary}")
+    print("Next:")
+    for line in lines:
+        print(f"  {line}")
 
 
 def write_atomic(path: Path, content: str) -> None:
@@ -344,6 +501,7 @@ def do_bump_crate(args: argparse.Namespace) -> None:
     print(f"crate version: {old} -> {new}")
     print(f"updated: {CARGO_TOML}")
     print(f"updated: {CHANGELOG}")
+    emit_next_step("crate-after-bump", crate_version=new)
 
 
 def do_bump_schema(args: argparse.Namespace) -> None:
@@ -386,6 +544,7 @@ def do_bump_schema(args: argparse.Namespace) -> None:
     print(f"updated: {SCHEMA_VERSION_FILE}")
     print(f"updated: {SCHEMA_CHANGELOG}")
     print(f"renamed: {old_schema_path} -> {new_schema_path}")
+    emit_next_step("schema-after-bump", schema_version=new)
 
 
 def do_tag_crate(args: argparse.Namespace) -> None:
@@ -393,6 +552,7 @@ def do_tag_crate(args: argparse.Namespace) -> None:
     tag_name = f"v{version}"
     create_tag(tag_name, f"release {tag_name}", args.dry_run)
     print(f"created local tag: {tag_name}")
+    emit_next_step("crate-after-tag", crate_version=version, tag_name=tag_name)
 
 
 def do_push_tag_crate(args: argparse.Namespace) -> None:
@@ -400,6 +560,7 @@ def do_push_tag_crate(args: argparse.Namespace) -> None:
     tag_name = f"v{version}"
     push_tag(tag_name, args.dry_run)
     print(f"pushed tag: {tag_name}")
+    emit_next_step("crate-after-push-tag", crate_version=version, tag_name=tag_name)
 
 
 def do_tag_schema(args: argparse.Namespace) -> None:
@@ -407,6 +568,7 @@ def do_tag_schema(args: argparse.Namespace) -> None:
     tag_name = f"schema-v{version}"
     create_tag(tag_name, f"schema release {tag_name}", args.dry_run)
     print(f"created local tag: {tag_name}")
+    emit_next_step("schema-after-tag", schema_version=version, tag_name=tag_name)
 
 
 def do_push_tag_schema(args: argparse.Namespace) -> None:
@@ -414,6 +576,11 @@ def do_push_tag_schema(args: argparse.Namespace) -> None:
     tag_name = f"schema-v{version}"
     push_tag(tag_name, args.dry_run)
     print(f"pushed tag: {tag_name}")
+    emit_next_step("schema-after-push-tag", schema_version=version, tag_name=tag_name)
+
+
+def do_next_step(args: argparse.Namespace) -> None:
+    emit_next_step(args.stage)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -422,6 +589,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     status = subparsers.add_parser("status", help="Show current crate/schema versions")
     status.set_defaults(func=do_status)
+
+    next_step = subparsers.add_parser(
+        "next-step",
+        help="Print guided next-step release hints for a flow stage",
+    )
+    next_step.add_argument("--stage", required=True, choices=NEXT_STEP_STAGES)
+    next_step.set_defaults(func=do_next_step)
 
     bump_crate = subparsers.add_parser("bump-crate", help="Bump crate version + CHANGELOG")
     bump_crate.add_argument("--level", choices=["patch", "minor", "major"])

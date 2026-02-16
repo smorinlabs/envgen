@@ -54,6 +54,71 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make tag-schema`
 - `make push-tag-schema`
 
+## Guided hints
+
+Release-flow commands print a `Hint:` + `Next:` block to guide the next command in the sequence.
+
+- Default behavior:
+  - Hints are shown for local interactive runs (TTY).
+  - Hints are suppressed in CI/non-interactive output.
+- Override behavior:
+  - `ENVGEN_HINTS=1` forces hints on.
+  - `ENVGEN_HINTS=0` forces hints off.
+
+Commands with guided next-step output include:
+
+- `make bump-crate*`
+- `make check-release`
+- `make tag-crate`
+- `make push-tag-crate`
+- `make bump-schema*`
+- `make check-schema`
+- `make tag-schema`
+- `make push-tag-schema`
+
+Example (crate flow):
+
+```text
+$ make bump-crate-patch
+...
+Hint: Crate release prep updated to vX.Y.Z.
+Next:
+  $ make check-release
+```
+
+```text
+$ make check-release
+...
+✓ Release readiness checks passed for crate vX.Y.Z
+Hint: Release readiness checks passed for crate vX.Y.Z.
+Next:
+  $ git add Cargo.toml Cargo.lock CHANGELOG.md
+  $ git commit -m "chore(release): bump crate to vX.Y.Z"
+  $ git push origin main
+  $ make tag-crate
+```
+
+Example (schema flow):
+
+```text
+$ make bump-schema-patch
+...
+Hint: Schema release prep updated to vA.B.C.
+Next:
+  $ make check-schema
+```
+
+```text
+$ make check-schema
+...
+Hint: Schema checks passed for artifact vA.B.C.
+Next:
+  $ git add SCHEMA_VERSION SCHEMA_CHANGELOG.md schemas/envgen.schema.vA.B.C.json
+  $ git commit -m "chore(schema): schema-vA.B.C"
+  $ git push origin main
+  $ make tag-schema
+```
+
 ## Quality gate matrix
 
 | Entry point | Canonical target | Purpose |

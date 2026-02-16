@@ -172,8 +172,11 @@ check-security: check-tools-security ## Security/dependency checks
 	typos
 
 .PHONY: check-release
-check-release: check-core ## Release readiness checks
+check-release: ## Release readiness checks
+	ENVGEN_HINTS=0 $(MAKE) check-core
 	cargo publish --dry-run --locked --allow-dirty
+	@python3 $(VERSION_BUMP_SCRIPT) status | awk -F= '/^crate_version=/{print "✓ Release readiness checks passed for crate v"$$2}'
+	@python3 $(VERSION_BUMP_SCRIPT) next-step --stage crate-after-check-release
 
 .PHONY: install
 install: ## Install envgen to ~/.cargo/bin
@@ -245,6 +248,7 @@ check-yaml-fixtures: yaml-lint-fixtures yaml-fmt-check-fixtures ## Lint + format
 
 check-schema: check-schema-biome check-schema-meta ## Validate the JSON Schema file (all layers)
 	@echo "✓ Schema passed all checks"
+	@python3 $(VERSION_BUMP_SCRIPT) next-step --stage schema-after-check-schema
 
 check-schema-biome: ## Layer 1: JSON lint/format check (Biome)
 	@echo "Checking schema formatting and linting (Biome)... (first run may download the tool)"
