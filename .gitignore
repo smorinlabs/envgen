@@ -3,6 +3,7 @@
 .envtool-cache
 .uv-cache
 .uv-tools
+.bin
 .DS_Store
 .env.local
 .env.dev

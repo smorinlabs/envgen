@@ -42,62 +42,13 @@ jobs:
           ref: ${{ steps.tag.outputs.tag }}
 
       - name: Validate tag matches Cargo.toml version
-        shell: bash
-        run: |
-          python - <<'PY'
-          import os
-          import re
-          import sys
-          try:
-            import tomllib  # py3.11+
-          except ModuleNotFoundError:
-            print("ERROR: Python tomllib not available", file=sys.stderr)
-            sys.exit(1)
-
-          tag = os.environ.get("TAG")
-          if not tag:
-            print("ERROR: TAG env var not set", file=sys.stderr)
-            sys.exit(1)
-          if not re.match(r"^v\\d+\\.\\d+\\.\\d+.*$", tag):
-            print(f"ERROR: tag '{tag}' does not look like vX.Y.Z", file=sys.stderr)
-            sys.exit(1)
-
-          with open("Cargo.toml", "rb") as f:
-            cargo = tomllib.load(f)
-          version = cargo.get("package", {}).get("version")
-          if not version:
-            print("ERROR: Could not find [package].version in Cargo.toml", file=sys.stderr)
-            sys.exit(1)
-
-          expected = f"v{version}"
-          if tag != expected:
-            print(f"ERROR: Tag '{tag}' does not match Cargo.toml version '{version}' (expected '{expected}')", file=sys.stderr)
-            sys.exit(1)
-          print(f"OK: {tag} matches Cargo.toml version {version}")
-          PY
-        env:
-          TAG: ${{ steps.tag.outputs.tag }}
-
-      - name: Extract version
         id: version
         shell: bash
+        env:
+          TAG: ${{ steps.tag.outputs.tag }}
         run: |
-          VERSION="$(python - <<'PY'
-          import sys
-          try:
-            import tomllib  # py3.11+
-          except ModuleNotFoundError:
-            print("ERROR: Python tomllib not available", file=sys.stderr)
-            sys.exit(1)
-          with open("Cargo.toml", "rb") as f:
-            cargo = tomllib.load(f)
-          version = cargo.get("package", {}).get("version")
-          if not version:
-            print("ERROR: Could not find [package].version in Cargo.toml", file=sys.stderr)
-            sys.exit(1)
-          print(version)
-          PY
-          )"
+          VERSION="$(python3 scripts/release/validate_tag.py --tag "$TAG")"
+          echo "Validated tag $TAG for Cargo.toml version $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   verify:
@@ -121,6 +72,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
+          toolchain: 1.88.0
           components: rustfmt, clippy
 
       - name: Rust cache
@@ -142,25 +94,23 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
 
-      - name: Install yamlfmt
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: |
-          go install github.com/google/yamlfmt/cmd/yamlfmt@v0.15.0
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      - name: Run checks (Linux)
+      - name: Install core check tooling (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
         env:
           UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
           UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
-        run: make check
+        run: make install-tools-core
 
-      - name: Rust checks (macOS)
+      - name: Run core checks (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        env:
+          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
+        run: make check-core
+
+      - name: Run Rust checks (macOS)
         if: ${{ matrix.os == 'macos-latest' }}
-        run: |
-          cargo fmt --check
-          cargo clippy -- -D warnings
-          cargo test --locked
+        run: make check-rust
 
   publish-crates:
     name: Publish to crates.io
@@ -179,7 +129,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
-          toolchain: stable
+          toolchain: 1.88.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
@@ -191,27 +141,12 @@ jobs:
       - name: Verify publish payload (dry run)
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
-        run: cargo publish --dry-run --locked
+        run: ./scripts/release/publish_crate.sh --dry-run
 
       - name: Publish
-        shell: bash
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates-auth.outputs.token }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${CARGO_REGISTRY_TOKEN:-}" ]]; then
-            echo "ERROR: missing temporary crates.io token from trusted publishing"
-            exit 1
-          fi
-
-          cargo publish --locked 2>publish.err || {
-            if grep -q "already uploaded" publish.err; then
-              echo "crate already published; skipping"
-              exit 0
-            fi
-            cat publish.err >&2
-            exit 1
-          }
+        run: ./scripts/release/publish_crate.sh
 
   github-release:
     name: Create GitHub Release
@@ -266,7 +201,7 @@ jobs:
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
         with:
-          toolchain: stable
+          toolchain: 1.88.0
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2

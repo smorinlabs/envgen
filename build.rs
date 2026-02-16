@@ -10,16 +10,10 @@ fn main() {
         .to_string();
 
     if !is_strict_semver(&schema_version) {
-        panic!(
-            "SCHEMA_VERSION must be strict semver X.Y.Z, got: {}",
-            schema_version
-        );
+        panic!("SCHEMA_VERSION must be strict semver X.Y.Z, got: {schema_version}");
     }
 
-    println!(
-        "cargo:rustc-env=ENVGEN_SCHEMA_ARTIFACT_VERSION={}",
-        schema_version
-    );
+    println!("cargo:rustc-env=ENVGEN_SCHEMA_ARTIFACT_VERSION={schema_version}");
 }
 
 fn is_strict_semver(version: &str) -> bool {

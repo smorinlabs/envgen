@@ -26,9 +26,21 @@ Configure the crate in crates.io to trust this repository and workflow:
 
 This mapping must match the publish job in `.github/workflows/release.yml` exactly.
 
+## Toolchain parity policy
+
+- Rust is patch-pinned at `1.88.0` via `rust-toolchain.toml`.
+- `Cargo.toml` `rust-version` is also `1.88.0`.
+- CI/release workflows set Rust `1.88.0` explicitly to keep local and automation behavior aligned.
+
 ## Command reference
 
 - `make version-status`
+- `make check-core`
+- `make check-msrv`
+- `make check-security`
+- `make check-release`
+- `make precommit-fast`
+- `make prepush-full`
 - `make bump-crate LEVEL=patch|minor|major`
 - `make bump-crate VERSION=X.Y.Z`
 - `make bump-crate-patch|bump-crate-minor|bump-crate-major`
@@ -41,6 +53,32 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make push-tag-crate`
 - `make tag-schema`
 - `make push-tag-schema`
+
+## Quality gate matrix
+
+| Entry point | Canonical target | Purpose |
+| --- | --- | --- |
+| Local commit hook | `make precommit-fast` | Fast non-mutating checks before commit |
+| Local pre-push hook | `make prepush-full` | Full quality/security/MSRV checks before push |
+| Local/manual core parity | `make check-core` | Core checks shared by CI Linux and release Linux verification |
+| CI Linux | `make check-core` | Core release-parity verification |
+| CI macOS | `make check-rust` | Rust-only portability checks |
+| CI MSRV | `make check-msrv` | Declared MSRV correctness |
+| CI security | `make check-security` | Audit/dependency/spelling checks |
+| Release verification (Linux) | `make check-core` | Same core gate as CI Linux |
+| Release verification (macOS) | `make check-rust` | Rust-only portability checks |
+| Local release readiness | `make check-release` | `check-core` + `cargo publish --dry-run --locked --allow-dirty` |
+
+## Local contributor workflow
+
+1. Install git hooks once:
+   - `make pre-commit-setup`
+2. Run fast checks when iterating:
+   - `make precommit-fast`
+3. Run full checks before pushing:
+   - `make prepush-full`
+4. Before tagging a crate release:
+   - `make check-release`
 
 Tag commands are file-first by default:
 
@@ -92,7 +130,7 @@ make bump-dry-run MODE=schema VERSION=A.B.C
 3. Apply the crate bump:
    - `make bump-crate LEVEL=patch` (or `VERSION=X.Y.Z`)
 4. Validate:
-   - `make check`
+   - `make check-release`
 5. Commit release prep (recommended):
    - `chore(release): vX.Y.Z`
 6. Create local tag:

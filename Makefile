@@ -6,14 +6,15 @@ UV ?= uv
 UVX ?= uvx
 UV_CACHE_DIR ?= $(CURDIR)/.uv-cache
 UV_TOOL_DIR ?= $(CURDIR)/.uv-tools
+BIN_DIR ?= $(CURDIR)/.bin
 BIOME ?= npx --yes @biomejs/biome@2.3.11
 CHECK_JSONSCHEMA ?= check-jsonschema
 CHECK_JSONSCHEMA_VERSION ?= 0.36.1
 YAMLLINT ?= yamllint
 YAMLLINT_VERSION ?= 1.38.0
-YAMLFMT ?= yamlfmt
+YAMLFMT ?= $(BIN_DIR)/yamlfmt
 YAMLFMT_VERSION ?= v0.15.0
-ACTIONLINT ?= actionlint
+ACTIONLINT ?= $(BIN_DIR)/actionlint
 
 YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name '*.yml' \) | LC_ALL=C sort)
 SCHEMA_ARTIFACT_VERSION := $(shell tr -d '\r\n' < SCHEMA_VERSION)
@@ -31,30 +32,47 @@ dev: ## Build the project in debug mode
 	cargo build
 
 .PHONY: test
-test: check-schema ## Run all tests
-	cargo test
+test: ## Run all tests
+	cargo test --locked
 
 .PHONY: check
-check: check-tools check-code test check-yaml-fixtures check-schema ## Run all checks (CI)
+check: check-core check-msrv check-security ## Run all checks
 
 .PHONY: check-tools
-check-tools: ## Verify required tooling is installed
+check-tools: check-tools-core check-tools-msrv check-tools-security ## Verify all required tooling is installed
+
+.PHONY: check-tools-core
+check-tools-core: ## Verify required tooling for core checks
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
 	@command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found. Install Python 3."; exit 1; }
 	@cargo fmt --version >/dev/null 2>&1 || { echo "ERROR: rustfmt not found. Run: make install-rust-tools (or rustup component add rustfmt)"; exit 1; }
 	@cargo clippy --version >/dev/null 2>&1 || { echo "ERROR: clippy not found. Run: make install-rust-tools (or rustup component add clippy)"; exit 1; }
-	@command -v cargo-audit >/dev/null 2>&1 || { echo "ERROR: cargo-audit not found. Run: make install-cargo-tools (or cargo install cargo-audit)"; exit 1; }
-	@command -v cargo-machete >/dev/null 2>&1 || { echo "ERROR: cargo-machete not found. Run: make install-cargo-tools (or cargo install cargo-machete)"; exit 1; }
-	@command -v cargo-msrv >/dev/null 2>&1 || { echo "ERROR: cargo-msrv not found. Run: make install-cargo-tools (or cargo install cargo-msrv)"; exit 1; }
-	@command -v typos >/dev/null 2>&1 || { echo "ERROR: typos not found. Run: make install-cargo-tools (or cargo install typos-cli)"; exit 1; }
-	@command -v pre-commit >/dev/null 2>&1 || { echo "ERROR: pre-commit not found. Run: make install-pre-commit (or uv tool install pre-commit / brew install pre-commit / pipx install pre-commit)"; exit 1; }
 	@command -v npx >/dev/null 2>&1 || { echo "ERROR: npx not found. Run: make install-node"; exit 1; }
 	@command -v $(UVX) >/dev/null 2>&1 || { echo "ERROR: $(UVX) not found. Run: make install-uv"; exit 1; }
-	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yaml-tools"; exit 1; }
-	@command -v $(ACTIONLINT) >/dev/null 2>&1 || { echo "ERROR: $(ACTIONLINT) not found. Run: make install-actionlint"; exit 1; }
+	@[ -x "$(YAMLFMT)" ] || { echo "ERROR: $(YAMLFMT) not found/executable. Run: make install-yaml-tools"; exit 1; }
+	@[ -x "$(ACTIONLINT)" ] || { echo "ERROR: $(ACTIONLINT) not found/executable. Run: make install-actionlint"; exit 1; }
+
+.PHONY: check-tools-msrv
+check-tools-msrv: ## Verify required tooling for MSRV checks
+	@command -v cargo-msrv >/dev/null 2>&1 || { echo "ERROR: cargo-msrv not found. Run: make install-tools-msrv (or cargo install cargo-msrv)"; exit 1; }
+
+.PHONY: check-tools-security
+check-tools-security: ## Verify required tooling for security checks
+	@command -v cargo-audit >/dev/null 2>&1 || { echo "ERROR: cargo-audit not found. Run: make install-tools-security (or cargo install cargo-audit)"; exit 1; }
+	@command -v cargo-machete >/dev/null 2>&1 || { echo "ERROR: cargo-machete not found. Run: make install-tools-security (or cargo install cargo-machete)"; exit 1; }
+	@command -v typos >/dev/null 2>&1 || { echo "ERROR: typos not found. Run: make install-tools-security (or cargo install typos-cli)"; exit 1; }
 
 .PHONY: install-tools
-install-tools: install-rust-tools install-cargo-tools install-node install-uv install-pre-commit install-yaml-tools install-actionlint ## Install all required tooling
+install-tools: install-tools-core install-tools-msrv install-tools-security ## Install all required tooling
+
+.PHONY: install-tools-core
+install-tools-core: install-rust-tools install-node install-uv install-yaml-tools install-actionlint ## Install core check tooling
+
+.PHONY: install-tools-msrv
+install-tools-msrv: install-cargo-msrv ## Install MSRV check tooling
+
+.PHONY: install-tools-security
+install-tools-security: install-cargo-audit install-cargo-machete install-typos ## Install security check tooling
 
 .PHONY: install-rust-tools
 install-rust-tools: ## Install Rust components (rustfmt, clippy)
@@ -120,12 +138,42 @@ install-uv: ## Install uv (provides uvx)
 
 .PHONY: check-code
 check-code: ## Run clippy and format check
-	cargo clippy -- -D warnings
+	cargo clippy --locked -- -D warnings -A clippy::uninlined_format_args
 	cargo fmt --check
 
 .PHONY: fmt
 fmt: ## Format all code
 	cargo fmt
+
+.PHONY: check-rust
+check-rust: check-code test ## Rust checks used by CI and release
+
+.PHONY: check-package-contents
+check-package-contents: ## Ensure packaged crate excludes local cache/tool directories
+	@tmp_file="$$(mktemp)"; \
+	trap 'rm -f "$$tmp_file"' EXIT; \
+	cargo package --allow-dirty --list > "$$tmp_file"; \
+	if grep -E '(^|/)\.uv-cache/|(^|/)\.uv-tools/' "$$tmp_file" >/dev/null; then \
+		echo "ERROR: packaged crate includes local uv cache/tool directories" >&2; \
+		grep -E '(^|/)\.uv-cache/|(^|/)\.uv-tools/' "$$tmp_file" >&2 || true; \
+		exit 1; \
+	fi
+
+.PHONY: check-core
+check-core: check-tools-core check-rust check-yaml-fixtures check-schema lint-actions check-package-contents ## Core checks shared by CI and release
+
+.PHONY: check-msrv
+check-msrv: check-tools-msrv msrv-verify ## MSRV checks
+
+.PHONY: check-security
+check-security: check-tools-security ## Security/dependency checks
+	cargo audit
+	cargo machete
+	typos
+
+.PHONY: check-release
+check-release: check-core ## Release readiness checks
+	cargo publish --dry-run --locked --allow-dirty
 
 .PHONY: install
 install: ## Install envgen to ~/.cargo/bin
@@ -133,21 +181,26 @@ install: ## Install envgen to ~/.cargo/bin
 
 # ─── Pre-commit ────────────────────────────────────────────────
 
-.PHONY: pre-commit-setup pre-commit-staged pre-commit-all
-pre-commit-setup: check-tools ## Install git pre-commit hook
-	pre-commit install
+.PHONY: pre-commit-setup pre-commit-staged pre-commit-all precommit-fast prepush-full
+pre-commit-setup: install-pre-commit ## Install git pre-commit/pre-push hooks
+	pre-commit install --hook-type pre-commit --hook-type pre-push
 
-pre-commit-staged: check-tools ## Run pre-commit hooks on staged files
-	pre-commit run
+pre-commit-staged: install-pre-commit ## Run pre-commit hooks on staged files
+	pre-commit run --hook-stage pre-commit
 
-pre-commit-all: check-tools ## Run pre-commit hooks on all files
-	pre-commit run --all-files
+pre-commit-all: install-pre-commit ## Run pre-commit hooks on all files
+	pre-commit run --hook-stage pre-commit --all-files
+
+precommit-fast: check-tools-core check-code lint-actions check-package-contents ## Fast local checks for commit hooks
+
+prepush-full: check-core check-security check-msrv ## Full local checks for pre-push/manual runs
 
 # ─── GitHub Actions Lint ────────────────────────────────────────
 
 .PHONY: install-actionlint
 install-actionlint: ## Install actionlint
-	curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- -b ~/.local/bin
+	@mkdir -p $(BIN_DIR)
+	curl -sSL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash | bash -s -- latest $(BIN_DIR)
 
 .PHONY: lint-actions
 lint-actions: ## Lint GitHub Actions workflows
@@ -162,7 +215,8 @@ install-yamllint: ## Fetch yamllint via uvx
 
 .PHONY: install-yamlfmt
 install-yamlfmt: ## Install yamlfmt (Go)
-	go install github.com/google/yamlfmt/cmd/yamlfmt@$(YAMLFMT_VERSION)
+	@mkdir -p $(BIN_DIR)
+	GOBIN=$(BIN_DIR) go install github.com/google/yamlfmt/cmd/yamlfmt@$(YAMLFMT_VERSION)
 
 .PHONY: install-yaml-tools
 install-yaml-tools: install-yamllint install-yamlfmt ## Install YAML lint/format tools
@@ -174,12 +228,12 @@ yaml-lint-fixtures: ## Lint YAML schemas in tests/fixtures
 
 .PHONY: yaml-fmt-fixtures
 yaml-fmt-fixtures: ## Format YAML schemas in tests/fixtures
-	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yamlfmt"; exit 1; }
+	@[ -x "$(YAMLFMT)" ] || { echo "ERROR: $(YAMLFMT) not found/executable. Run: make install-yamlfmt"; exit 1; }
 	$(YAMLFMT) -no_global_conf -conf .yamlfmt $(YAML_FIXTURES)
 
 .PHONY: yaml-fmt-check-fixtures
 yaml-fmt-check-fixtures: ## Check YAML formatting in tests/fixtures
-	@command -v $(YAMLFMT) >/dev/null 2>&1 || { echo "ERROR: $(YAMLFMT) not found. Run: make install-yamlfmt"; exit 1; }
+	@[ -x "$(YAMLFMT)" ] || { echo "ERROR: $(YAMLFMT) not found/executable. Run: make install-yamlfmt"; exit 1; }
 	$(YAMLFMT) -no_global_conf -conf .yamlfmt -lint $(YAML_FIXTURES)
 
 .PHONY: check-yaml-fixtures
@@ -311,7 +365,7 @@ commit-message: ## Generate a conventional commit message for staged/changed fil
 .PHONY: msrv-verify msrv-find msrv-list
 
 msrv-verify: ## Verify the crate builds with the declared MSRV (runs tests too)
-	cargo msrv verify -- cargo test
+	cargo msrv verify -- cargo test --locked
 
 msrv-find: ## Find the actual MSRV by bisecting through Rust versions
 	cargo msrv find
