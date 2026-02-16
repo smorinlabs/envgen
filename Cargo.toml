@@ -1,13 +1,13 @@
 [package]
 name = "envgen"
-version = "0.3.0"
+version = "0.3.3"
 edition = "2021"
-description = "Environment file generator CLI — generate .env files from declarative YAML schemas"
+description = "Generate and validate .env files from one spec - self-documenting config, consistent across environments, secrets stay out of git."
 readme = "README.md"
 repository = "https://github.com/smorinlabs/envgen"
 license = "MIT"
-keywords = ["dotenv", "env", "yaml", "schema", "cli"]
-categories = ["command-line-utilities", "development-tools"]
+keywords = ["dotenv", "config", "yaml", "schema", "secrets"]
+categories = ["command-line-utilities", "config"]
 rust-version = "1.88.0"
 
 # Keep packaging deterministic with a root-anchored allowlist.
