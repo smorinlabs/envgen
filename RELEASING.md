@@ -291,7 +291,12 @@ Pushing `schema-v*.*.*` tags does not trigger crates.io publish.
 
 Automation equivalent:
 
-- `.github/workflows/homebrew-tap-pr.yml` runs on `release.published` and can be retried with `workflow_dispatch`.
+- Tag push triggers `.github/workflows/release.yml`.
+- `release.yml` job `dispatch-homebrew-tap-pr` explicitly dispatches
+  `.github/workflows/homebrew-tap-pr.yml` using `workflow_dispatch` with
+  `tag=vX.Y.Z`.
+- You can manually retry the tap workflow with:
+  - `gh workflow run homebrew-tap-pr.yml -R smorinlabs/envgen -f tag=vX.Y.Z`
 
 ## Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)
 
@@ -346,6 +351,11 @@ Docs:
 - Partial update on bump failure:
   - A failed bump can leave version/changelog edits before later steps complete.
   - Recovery: run `make sync-lockfile` and retry the bump after fixing the reported error.
+- Homebrew tap workflow dispatch failure:
+  - Symptom: `release.yml` job `Dispatch Homebrew Tap PR workflow` fails.
+  - Impact: crate release remains successful (non-blocking), but tap sync does not start automatically.
+  - Fix: check the dispatch job logs and repo workflow permissions (`actions: write`), then run:
+    - `gh workflow run homebrew-tap-pr.yml -R smorinlabs/envgen -f tag=vX.Y.Z`
 - Homebrew tap token auth/permission errors:
   - Symptom: workflow step `Validate tap token permissions` fails with `::error::` output.
   - Fix: follow `Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)` in this document.

@@ -179,6 +179,57 @@ jobs:
           name: ${{ needs.meta.outputs.tag }}
           body: ${{ steps.git-cliff.outputs.content }}
 
+  dispatch-homebrew-tap-pr:
+    name: Dispatch Homebrew Tap PR workflow
+    needs: [meta, github-release]
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      actions: write
+      contents: read
+    steps:
+      - name: Dispatch Homebrew Tap PR workflow
+        id: dispatch
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = '${{ needs.meta.outputs.tag }}';
+            const workflowId = 'homebrew-tap-pr.yml';
+            const ref = context.payload.repository.default_branch;
+            const { owner, repo } = context.repo;
+
+            core.info(`Dispatching ${workflowId} for tag ${tag} on ref ${ref}`);
+
+            try {
+              await github.rest.actions.createWorkflowDispatch({
+                owner,
+                repo,
+                workflow_id: workflowId,
+                ref,
+                inputs: { tag },
+              });
+              core.info(`Dispatched ${workflowId} with tag=${tag}`);
+            } catch (error) {
+              core.error(
+                `Failed to dispatch ${workflowId} for tag ${tag}: ${error.message}`
+              );
+              core.error(
+                `Manual fallback: gh workflow run ${workflowId} -R ${owner}/${repo} -f tag=${tag}`
+              );
+              core.error(
+                "See RELEASING.md -> Homebrew tap sync flow (example) for dispatch fallback guidance."
+              );
+              core.setFailed(error.message);
+            }
+
+      - name: Dispatch fallback guidance
+        if: ${{ failure() }}
+        run: |
+          echo "::warning::Homebrew tap workflow dispatch failed. Crate release remains non-blocking."
+          echo "::warning::Manual fallback: gh workflow run homebrew-tap-pr.yml -R ${{ github.repository }} -f tag=${{ needs.meta.outputs.tag }}"
+          echo "::warning::See RELEASING.md -> Homebrew tap sync flow (example)."
+
   build:
     name: Build & Upload Binaries
     needs: [meta, github-release]

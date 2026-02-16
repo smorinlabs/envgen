@@ -19,6 +19,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [1.0.6] - 2026-02-16
+
+### Added
+
+### Changed
+
+- Switched Homebrew tap automation from `release.published` listening to explicit dispatch from the release workflow.
+- Added a non-blocking release job that dispatches `homebrew-tap-pr.yml` and emits manual fallback guidance on dispatch failure.
+- Updated release documentation and ADRs for the explicit dispatch trigger contract.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [1.0.5] - 2026-02-16
 
 ### Added
