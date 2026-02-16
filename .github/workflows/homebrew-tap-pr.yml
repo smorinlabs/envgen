@@ -1,0 +1,101 @@
+name: Homebrew Tap PR
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to sync to tap (e.g. v1.0.0)"
+        required: true
+        type: string
+
+concurrency:
+  group: homebrew-tap-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.release.tag_name || inputs.tag || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  update-tap:
+    name: Update homebrew tap formula
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      ENVGEN_HINTS: "0"
+      HOMEBREW_TAP_REPO: smorinlabs/homebrew-tap
+      TAP_REPO_DIR: ${{ github.workspace }}/homebrew-tap
+      HOMEBREW_SOURCE_JSON: ${{ github.workspace }}/.homebrew/source.json
+    steps:
+      - name: Resolve tag
+        id: tag
+        shell: bash
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.tag }}"
+          fi
+
+          if [[ -z "$TAG" ]]; then
+            echo "ERROR: missing release tag"
+            exit 1
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout envgen
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          fetch-depth: 0
+          ref: ${{ steps.tag.outputs.tag }}
+
+      - name: Validate tag matches Cargo.toml version
+        id: version
+        shell: bash
+        run: |
+          VERSION="$(python3 scripts/release/validate_tag.py --tag "${{ steps.tag.outputs.tag }}")"
+          echo "Validated tag ${{ steps.tag.outputs.tag }} for Cargo.toml version $VERSION"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve source tarball metadata
+        run: |
+          make homebrew-source \
+            TAG="${{ steps.tag.outputs.tag }}" \
+            HOMEBREW_SOURCE_JSON="$HOMEBREW_SOURCE_JSON"
+
+      - name: Checkout tap repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          repository: smorinlabs/homebrew-tap
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          path: homebrew-tap
+          fetch-depth: 0
+
+      - name: Configure git author
+        working-directory: ${{ env.TAP_REPO_DIR }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync formula
+        run: |
+          make homebrew-sync-formula \
+            TAG="${{ steps.tag.outputs.tag }}" \
+            TAP_REPO_DIR="$TAP_REPO_DIR" \
+            HOMEBREW_SOURCE_JSON="$HOMEBREW_SOURCE_JSON"
+
+      - name: Verify formula
+        run: |
+          make homebrew-verify-formula \
+            TAG="${{ steps.tag.outputs.tag }}" \
+            TAP_REPO_DIR="$TAP_REPO_DIR"
+
+      - name: Open or update tap PR
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+        run: |
+          make homebrew-open-tap-pr \
+            TAG="${{ steps.tag.outputs.tag }}" \
+            TAP_REPO_DIR="$TAP_REPO_DIR" \
+            HOMEBREW_TAP_REPO="$HOMEBREW_TAP_REPO"

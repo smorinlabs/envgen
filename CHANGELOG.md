@@ -19,6 +19,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Security
 
+## [1.0.1] - 2026-02-16
+
+### Added
+
+### Changed
+
+- Added a separate `homebrew-tap` release flow: `make homebrew-*` targets, `scripts/homebrew/tap_release.py`, and an automated tap PR workflow.
+
+### Deprecated
+
+### Removed
+
+### Fixed
+
+### Security
+
 ## [1.0.0] - 2026-02-16
 
 ### Added

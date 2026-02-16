@@ -20,6 +20,13 @@ YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name 
 SCHEMA_ARTIFACT_VERSION := $(shell tr -d '\r\n' < SCHEMA_VERSION)
 SCHEMA_FILE := schemas/envgen.schema.v$(SCHEMA_ARTIFACT_VERSION).json
 VERSION_BUMP_SCRIPT := scripts/version_bump.py
+HOMEBREW_TAP_SCRIPT := scripts/homebrew/tap_release.py
+HOMEBREW_SOURCE_REPO ?= smorinlabs/envgen
+HOMEBREW_TAP_REPO ?= smorinlabs/homebrew-tap
+HOMEBREW_TAP_REPO_DIR ?= /Users/stevemorin/c/homebrew-tap
+HOMEBREW_TAP_FORMULA ?= Formula/envgen.rb
+HOMEBREW_SOURCE_JSON ?= $(CURDIR)/.homebrew/source-$(TAG).json
+TAP_REPO_DIR ?= $(HOMEBREW_TAP_REPO_DIR)
 
 # ─── Build & Test ────────────────────────────────────────────────
 
@@ -350,6 +357,97 @@ tag-schema: ## Create local schema tag schema-vA.B.C (SCHEMA_VERSION can overrid
 .PHONY: push-tag-schema
 push-tag-schema: ## Push schema tag schema-vA.B.C to origin (SCHEMA_VERSION can override file-derived value)
 	SCHEMA_VERSION="$(SCHEMA_VERSION)" python3 $(VERSION_BUMP_SCRIPT) push-tag-schema $(if $(DRY_RUN),--dry-run,)
+
+# ─── Homebrew Tap Release ───────────────────────────────────────
+
+.PHONY: homebrew-status
+homebrew-status: ## Show Homebrew release/tap status for TAG=vX.Y.Z
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-status TAG=v1.0.0)"; \
+		exit 1; \
+	fi
+	python3 $(HOMEBREW_TAP_SCRIPT) status \
+		--tag "$(TAG)" \
+		--source-repo "$(HOMEBREW_SOURCE_REPO)" \
+		--source-json "$(HOMEBREW_SOURCE_JSON)" \
+		--tap-repo "$(HOMEBREW_TAP_REPO)" \
+		--tap-repo-dir "$(HOMEBREW_TAP_REPO_DIR)" \
+		--formula-path "$(HOMEBREW_TAP_FORMULA)"
+
+.PHONY: homebrew-source
+homebrew-source: ## Download and hash source tarball for TAG=vX.Y.Z
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-source TAG=v1.0.0)"; \
+		exit 1; \
+	fi
+	python3 $(HOMEBREW_TAP_SCRIPT) resolve-source \
+		--tag "$(TAG)" \
+		--source-repo "$(HOMEBREW_SOURCE_REPO)" \
+		--out-json "$(HOMEBREW_SOURCE_JSON)"
+
+.PHONY: homebrew-sync-formula
+homebrew-sync-formula: ## Sync tap formula from source metadata (TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap)
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-sync-formula TAG=v1.0.0 TAP_REPO_DIR=/path/to/homebrew-tap)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAP_REPO_DIR)" ]; then \
+		echo "ERROR: TAP_REPO_DIR is required"; \
+		exit 1; \
+	fi
+	python3 $(HOMEBREW_TAP_SCRIPT) sync-formula \
+		--tag "$(TAG)" \
+		--formula-path "$(TAP_REPO_DIR)/$(HOMEBREW_TAP_FORMULA)" \
+		--source-json "$(HOMEBREW_SOURCE_JSON)" \
+		$(if $(DRY_RUN),--dry-run,)
+
+.PHONY: homebrew-verify-formula
+homebrew-verify-formula: ## Run brew style/audit/install/test on tap formula (TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap)
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-verify-formula TAG=v1.0.0 TAP_REPO_DIR=/path/to/homebrew-tap)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAP_REPO_DIR)" ]; then \
+		echo "ERROR: TAP_REPO_DIR is required"; \
+		exit 1; \
+	fi
+	python3 $(HOMEBREW_TAP_SCRIPT) verify-formula \
+		--tag "$(TAG)" \
+		--tap-repo-dir "$(TAP_REPO_DIR)" \
+		--tap-repo "$(HOMEBREW_TAP_REPO)" \
+		--formula-path "$(HOMEBREW_TAP_FORMULA)"
+
+.PHONY: homebrew-open-tap-pr
+homebrew-open-tap-pr: ## Open/update tap PR for TAG=vX.Y.Z (requires GH auth; TAP_REPO_DIR=/path/to/homebrew-tap)
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-open-tap-pr TAG=v1.0.0 TAP_REPO_DIR=/path/to/homebrew-tap)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAP_REPO_DIR)" ]; then \
+		echo "ERROR: TAP_REPO_DIR is required"; \
+		exit 1; \
+	fi
+	python3 $(HOMEBREW_TAP_SCRIPT) open-pr \
+		--tag "$(TAG)" \
+		--tap-repo "$(HOMEBREW_TAP_REPO)" \
+		--tap-repo-dir "$(TAP_REPO_DIR)" \
+		--formula-path "$(HOMEBREW_TAP_FORMULA)" \
+		$(if $(DRY_RUN),--dry-run,)
+
+.PHONY: homebrew-release-tap
+homebrew-release-tap: ## End-to-end tap release flow (TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap)
+	@if [ -z "$(TAG)" ]; then \
+		echo "ERROR: TAG is required (example: make homebrew-release-tap TAG=v1.0.0 TAP_REPO_DIR=/path/to/homebrew-tap)"; \
+		exit 1; \
+	fi
+	@if [ -z "$(TAP_REPO_DIR)" ]; then \
+		echo "ERROR: TAP_REPO_DIR is required"; \
+		exit 1; \
+	fi
+	$(MAKE) homebrew-source TAG="$(TAG)" HOMEBREW_SOURCE_JSON="$(HOMEBREW_SOURCE_JSON)" HOMEBREW_SOURCE_REPO="$(HOMEBREW_SOURCE_REPO)"
+	$(MAKE) homebrew-sync-formula TAG="$(TAG)" TAP_REPO_DIR="$(TAP_REPO_DIR)" HOMEBREW_SOURCE_JSON="$(HOMEBREW_SOURCE_JSON)" HOMEBREW_TAP_FORMULA="$(HOMEBREW_TAP_FORMULA)" $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
+	$(MAKE) homebrew-verify-formula TAG="$(TAG)" TAP_REPO_DIR="$(TAP_REPO_DIR)" HOMEBREW_TAP_FORMULA="$(HOMEBREW_TAP_FORMULA)"
+	$(MAKE) homebrew-open-tap-pr TAG="$(TAG)" TAP_REPO_DIR="$(TAP_REPO_DIR)" HOMEBREW_TAP_REPO="$(HOMEBREW_TAP_REPO)" HOMEBREW_TAP_FORMULA="$(HOMEBREW_TAP_FORMULA)" $(if $(DRY_RUN),DRY_RUN=$(DRY_RUN),)
 
 # ─── Commit Message ──────────────────────────────────────────────
 

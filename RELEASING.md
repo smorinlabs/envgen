@@ -1,6 +1,6 @@
 # Releasing `envgen`
 
-This repo has two independent release streams:
+This repo has three independent release streams:
 
 - Crate release stream:
   - Version source: `Cargo.toml` (`[package].version`)
@@ -13,6 +13,42 @@ This repo has two independent release streams:
   - Changelog: `SCHEMA_CHANGELOG.md`
   - Tags: `schema-vA.B.C`
   - Automation: no publish workflow is triggered by schema tags
+- Homebrew tap sync stream:
+  - Source tag: crate tag `vX.Y.Z` from `smorinlabs/envgen`
+  - Formula host repo: `smorinlabs/homebrew-tap`
+  - Formula path: `Formula/envgen.rb`
+  - Automation: `.github/workflows/homebrew-tap-pr.yml` (opens/updates PR in tap repo)
+
+## Homebrew repo ownership
+
+- `smorinlabs/envgen` owns:
+  - release tag (`vX.Y.Z`) creation
+  - source tarball URL + SHA256 resolution
+  - automation code (`scripts/homebrew/tap_release.py`, `make homebrew-*`)
+  - workflow that opens/updates tap PRs (`.github/workflows/homebrew-tap-pr.yml`)
+- `smorinlabs/homebrew-tap` owns:
+  - formula files (`Formula/*.rb`)
+  - PR review/merge policy for tap updates
+  - optional tap-native CI
+- `Homebrew/homebrew-core` is future/optional:
+  - no required release gate for `envgen`
+  - existing `release.yml` `homebrew-core` job remains non-blocking until formula exists upstream
+
+## GitHub source tarball contract (for Homebrew formulas)
+
+For release tag `vX.Y.Z`, the formula source URL is:
+
+- `https://github.com/smorinlabs/envgen/archive/refs/tags/vX.Y.Z.tar.gz`
+
+Behavior:
+
+- GitHub serves this as a redirect (`302`) to codeload, then `200` when the tag exists.
+- This archive is generated from the git tag; it is not uploaded by release assets.
+- Formula `sha256` must be computed from this tarball content.
+
+Current verified example:
+
+- `v1.0.0` (published `2026-02-16T20:11:01Z`) resolves successfully via the URL above.
 
 ## One-time setup (crates.io trusted publishing)
 
@@ -55,6 +91,12 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make push-tag-crate`
 - `make tag-schema`
 - `make push-tag-schema`
+- `make homebrew-status TAG=vX.Y.Z`
+- `make homebrew-source TAG=vX.Y.Z`
+- `make homebrew-sync-formula TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap`
+- `make homebrew-verify-formula TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap`
+- `make homebrew-open-tap-pr TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap`
+- `make homebrew-release-tap TAG=vX.Y.Z TAP_REPO_DIR=/path/to/homebrew-tap`
 
 ## Guided hints
 
@@ -77,6 +119,10 @@ Commands with guided next-step output include:
 - `make check-schema`
 - `make tag-schema`
 - `make push-tag-schema`
+- `make homebrew-source`
+- `make homebrew-sync-formula`
+- `make homebrew-verify-formula`
+- `make homebrew-open-tap-pr`
 
 Example (crate flow):
 
@@ -230,6 +276,23 @@ The release workflow at `.github/workflows/release.yml` runs when:
 
 Pushing `schema-v*.*.*` tags does not trigger crates.io publish.
 
+## Homebrew tap sync flow (example)
+
+1. Ensure a crate release tag exists in `smorinlabs/envgen`:
+   - e.g. `v1.0.0`
+2. Prepare source metadata:
+   - `make homebrew-source TAG=v1.0.0`
+3. Sync formula in tap clone:
+   - `make homebrew-sync-formula TAG=v1.0.0 TAP_REPO_DIR=/Users/stevemorin/c/homebrew-tap`
+4. Verify formula:
+   - `make homebrew-verify-formula TAG=v1.0.0 TAP_REPO_DIR=/Users/stevemorin/c/homebrew-tap`
+5. Open/update tap PR:
+   - `make homebrew-open-tap-pr TAG=v1.0.0 TAP_REPO_DIR=/Users/stevemorin/c/homebrew-tap`
+
+Automation equivalent:
+
+- `.github/workflows/homebrew-tap-pr.yml` runs on `release.published` and can be retried with `workflow_dispatch`.
+
 ## Failure modes
 
 - Missing release section for tagging:
@@ -265,5 +328,6 @@ For migration safety, token-based publish remains available through
 ## Notes
 
 - This setup assumes you use "Squash and merge" and "Default to PR title for squash merge commits" in GitHub settings so your main-branch commits stay Conventional.
+- Tap PR automation requires `HOMEBREW_TAP_GITHUB_TOKEN` secret with write access to `smorinlabs/homebrew-tap`.
 - homebrew-core bump PRs require the `HOMEBREW_GITHUB_API_TOKEN` secret (a GitHub token able to open PRs against `Homebrew/homebrew-core`).
 - The homebrew-core automation will no-op until the `envgen` formula exists in `Homebrew/homebrew-core`.

@@ -6,6 +6,7 @@ __pycache__/
 .uv-cache
 .uv-tools
 .bin
+.homebrew
 .DS_Store
 .env.local
 .env.dev

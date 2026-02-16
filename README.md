@@ -77,11 +77,15 @@ Variables to resolve:
 
 ## Install
 
-### Homebrew (homebrew-core)
+### Homebrew (personal tap)
 
 ```bash
+brew tap smorinlabs/tap
 brew install envgen
 ```
+
+This project currently ships through the `smorinlabs/tap` formula stream. `homebrew-core`
+support is a future track and is intentionally non-blocking for releases.
 
 ### Cargo
 
