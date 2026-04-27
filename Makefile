@@ -100,7 +100,7 @@ install-cargo-machete: ## Install cargo-machete
 .PHONY: install-cargo-msrv
 install-cargo-msrv: ## Install cargo-msrv
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-msrv --locked
+	cargo install cargo-msrv@0.18.4 --locked
 
 .PHONY: install-typos
 install-typos: ## Install typos-cli
