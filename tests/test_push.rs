@@ -208,3 +208,44 @@ fn test_push_empty_file_refused_without_allow_empty() {
         .code(1)
         .stderr(predicate::str::contains("Refusing to push empty value"));
 }
+
+#[test]
+fn test_push_dry_run_from_stdin_pipe_strips_trailing_newline() {
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg("tests/fixtures/push_basic.yaml")
+        .arg("--env")
+        .arg("local")
+        .arg("--dry-run")
+        .arg("--show-secret")
+        .arg("STORED_SECRET")
+        .write_stdin("piped-secret\n")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("piped-secret"));
+}
+
+#[test]
+fn test_push_from_file_takes_precedence_over_stdin_pipe() {
+    let tmp = TempDir::new().unwrap();
+    let p = tmp.path().join("v.txt");
+    fs::write(&p, "from-file-wins").unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg("tests/fixtures/push_basic.yaml")
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg(&p)
+        .arg("--dry-run")
+        .arg("--show-secret")
+        .arg("STORED_SECRET")
+        .write_stdin("from-stdin-loses")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("from-file-wins"))
+        .stdout(predicate::str::contains("from-stdin-loses").not());
+}
