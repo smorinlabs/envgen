@@ -26,6 +26,9 @@ pub struct Source {
     pub command: String,
 
     #[serde(default)]
+    pub push_command: Option<String>,
+
+    #[serde(default)]
     pub label: Option<String>,
 
     #[serde(default)]
@@ -105,6 +108,34 @@ fn default_sensitive() -> bool {
 
 fn default_required() -> bool {
     true
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn source_deserializes_push_command_when_present() {
+        let yaml = r#"
+command: "read --key {key}"
+push_command: "write --key {key} --data-file=-"
+"#;
+        let src: Source = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(src.command, "read --key {key}");
+        assert_eq!(
+            src.push_command.as_deref(),
+            Some("write --key {key} --data-file=-")
+        );
+    }
+
+    #[test]
+    fn source_push_command_defaults_to_none() {
+        let yaml = r#"
+command: "read --key {key}"
+"#;
+        let src: Source = serde_yaml::from_str(yaml).unwrap();
+        assert_eq!(src.push_command, None);
+    }
 }
 
 impl Variable {
