@@ -74,7 +74,7 @@ Exactly one variable per invocation.
 
 In modes 1 and 2, exactly one trailing newline (`\n` or `\r\n`) is stripped from the value before piping. This matches shell `$(cmd)` semantics and the common case `echo "secret" > file`. Users who genuinely need a trailing newline in the stored secret are out of luck in v1; this is rare enough to not be worth a flag. Mode 3 (interactive prompt) reads a single line and uses it verbatim.
 
-Passing `--from-file` while stdin is also piped is an error: `Cannot use --from-file together with stdin pipe. Pick one.`
+When `--from-file` is provided, stdin is ignored. There is no separate ambiguity error: file beats pipe. (We can't reliably distinguish "user piped data" from "test harness closed stdin" via `IsTerminal`, so the simpler rule wins.)
 
 ### Empty-value guard
 
@@ -138,7 +138,6 @@ Mirrors the resolver chain in `pull` (see `src/schema/types.rs:127-131`):
 | Source is `manual` | 1 | `Cannot push '<VAR>' for env=<ENV>: source is 'manual'. Manual sources have no remote — store the value in your password manager.` |
 | Source has no `push_command` | 1 | `Cannot push '<VAR>' for env=<ENV>. Source '<SOURCE>' has no push_command defined.\n\nAdd to your schema:\n  sources:\n    <SOURCE>:\n      push_command: "<example, e.g. gcloud secrets versions add {key} --data-file=- --project={app_slug}>"` |
 | Empty value without `--allow-empty` | 1 | `Refusing to push empty value for '<VAR>'. Pass --allow-empty to override.` |
-| Ambiguous value source | 1 | `Cannot use --from-file together with stdin pipe. Pick one.` |
 | User declined prompt | 1 | `Push cancelled.` |
 | Push command exited non-zero | 2 | `Push command failed (exit <N>): <stderr>\nResolved command: <expanded_cmd>` (value redacted unless `--show-secret`) |
 | Push command timed out | 2 | `Push command timed out after <N> seconds.` |
