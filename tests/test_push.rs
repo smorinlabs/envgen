@@ -249,3 +249,141 @@ fn test_push_from_file_takes_precedence_over_stdin_pipe() {
         .stdout(predicate::str::contains("from-file-wins"))
         .stdout(predicate::str::contains("from-stdin-loses").not());
 }
+
+#[test]
+fn test_push_writes_value_to_fake_secret_store() {
+    let tmp = TempDir::new().unwrap();
+    let value_file = tmp.path().join("v.txt");
+    fs::write(&value_file, "secret-payload").unwrap();
+
+    // Build a self-contained schema fixture inside the tmpdir.
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        format!(
+            r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: "{tmp}/.env.local"
+environments:
+  local:
+    out_dir: "{tmp}"
+sources:
+  fakefs:
+    command: "cat {{out_dir}}/{{key}}.txt"
+    push_command: "tee {{out_dir}}/{{key}}.txt > /dev/null"
+variables:
+  STORED:
+    description: "Stored secret."
+    source: fakefs
+"#,
+            tmp = tmp.path().display()
+        ),
+    )
+    .unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg(&value_file)
+        .arg("STORED")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Pushed STORED to local"));
+
+    let written = fs::read_to_string(tmp.path().join("STORED.txt")).unwrap();
+    assert_eq!(written, "secret-payload");
+}
+
+#[test]
+fn test_push_command_failure_returns_exit_code_2() {
+    let tmp = TempDir::new().unwrap();
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: ".env"
+environments:
+  local: {}
+sources:
+  failing:
+    command: "echo {key}"
+    push_command: "exit 1"
+variables:
+  V:
+    description: "x"
+    source: failing
+"#,
+    )
+    .unwrap();
+
+    let v = tmp.path().join("v.txt");
+    fs::write(&v, "anything").unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg(&v)
+        .arg("V")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("Push command failed"));
+}
+
+#[test]
+fn test_push_command_timeout_returns_exit_code_2() {
+    let tmp = TempDir::new().unwrap();
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: ".env"
+environments:
+  local: {}
+sources:
+  slow:
+    command: "echo {key}"
+    push_command: "sleep 10"
+variables:
+  V:
+    description: "x"
+    source: slow
+"#,
+    )
+    .unwrap();
+
+    let v = tmp.path().join("v.txt");
+    fs::write(&v, "anything").unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg(&v)
+        .arg("--source-timeout")
+        .arg("1")
+        .arg("V")
+        .assert()
+        .failure()
+        .code(2)
+        .stderr(predicate::str::contains("timed out"));
+}

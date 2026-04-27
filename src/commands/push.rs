@@ -3,6 +3,7 @@ use colored::Colorize;
 use std::io::{IsTerminal, Read};
 use std::path::PathBuf;
 
+use crate::resolver::command_source;
 use crate::schema::validation::{load_and_validate_schema_file, SchemaValidation};
 
 pub struct PushOptions {
@@ -56,6 +57,13 @@ fn read_value_from_stdin_pipe() -> Result<String> {
         .read_to_string(&mut buf)
         .context("Failed to read value from stdin")?;
     Ok(strip_one_trailing_newline(&buf))
+}
+
+fn display_source(name: &str, src: &crate::schema::types::Source) -> String {
+    match &src.label {
+        Some(label) => format!("{} ({})", name, label),
+        None => name.to_string(),
+    }
 }
 
 fn prompt_for_value(var_name: &str) -> Result<String> {
@@ -168,6 +176,19 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         );
     }
 
+    let env_config = schema.environments.get(&opts.env_name).unwrap();
+    let key = var.effective_key_for_env(&opts.var_name, &opts.env_name);
+
+    // SAFETY: source.push_command is Some — we bailed earlier if it was None.
+    let push_template = source.push_command.as_ref().unwrap();
+    let resolved_cmd = command_source::build_command(
+        push_template,
+        &opts.var_name,
+        Some(&key),
+        &opts.env_name,
+        env_config,
+    )?;
+
     if opts.dry_run {
         let displayed = if opts.show_secret {
             value.clone()
@@ -177,14 +198,34 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         println!();
         println!("variable:    {}", opts.var_name);
         println!("environment: {}", opts.env_name);
-        println!("source:      {}", source_name);
+        println!("source:      {}", display_source(&source_name, source));
+        println!("command:     {}", resolved_cmd);
         println!("value:       {}", displayed);
-        println!();
-        println!("(dry-run: command resolution lands in a later task)");
         return Ok(0);
     }
 
-    bail!("push: command resolution not yet implemented");
+    match command_source::execute_command_with_stdin(&resolved_cmd, Some(&value), opts.source_timeout).await {
+        Ok(_) => {
+            println!(
+                "{} Pushed {} to {} via {}",
+                "✓".green(),
+                opts.var_name,
+                opts.env_name,
+                source_name
+            );
+            Ok(0)
+        }
+        Err(e) => {
+            let msg = e.to_string();
+            if msg.contains("timed out") {
+                eprintln!("Push command timed out after {} seconds.", opts.source_timeout);
+            } else {
+                eprintln!("Push command failed: {}", msg);
+                eprintln!("Resolved command: {}", resolved_cmd);
+            }
+            Ok(2)
+        }
+    }
 }
 
 #[cfg(test)]
