@@ -39,6 +39,7 @@ sources:
     command: "bash -lc 'echo {app_slug}-{environment}-{key}-$(date +%Y%m%d%H%M%S)'"
   gcloud:
     command: "gcloud secrets versions access latest --secret={key} --project={app_slug}"
+    push_command: "gcloud secrets versions add {key} --data-file=- --project={app_slug}"
     label: "Google Cloud Secret Manager"
     url: "https://console.cloud.google.com/security/secret-manager"
     description: "Primary secret store for non-local environments."

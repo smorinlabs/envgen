@@ -150,6 +150,7 @@ envgen docs -c env.dev.yaml
 - `envgen list`: show variables (table by default; `--format json` is available)
 - `envgen docs`: generate Markdown documentation for a schema
 - `envgen pull`: resolve variables and write the destination `.env` file
+- `envgen push`: write a value back to a variable's source (the inverse of `pull`)
 - `envgen schema`: export the embedded JSON Schema used for structural validation and editor autocomplete
 - `envgen readme`: print the embedded README.md to stdout
 
@@ -157,7 +158,50 @@ Useful flags:
 
 - `pull`: `--dry-run`, `--force`, `--destination`, `--source-timeout`, `--interactive`, `--show-secrets`, `--write-on-error`
 - `pull --source-timeout <seconds>`: hard timeout per source command; timed-out commands are terminated
+- `push`: `--from-file`, `--yes`, `--show-secret`, `--dry-run`, `--source-timeout`, `--allow-empty`
 - `list`: `--env`, `--format`
+
+### `envgen push`
+
+`push` writes a value back to a variable's source. To use it, the source must declare a
+`push_command` template alongside `command`. The new value is delivered via the child
+process's stdin (no `{value}` placeholder) so secrets stay out of shell history:
+
+```yaml
+sources:
+  gcloud:
+    command:      "gcloud secrets versions access latest --secret={key} --project={app_slug}"
+    push_command: "gcloud secrets versions add {key} --data-file=- --project={app_slug}"
+```
+
+Three ways to provide the value:
+
+```bash
+# 1. Interactive prompt (hidden input):
+envgen push -c env.yaml --env stg STRIPE_SECRET_KEY
+
+# 2. From a file:
+envgen push -c env.yaml --env stg --from-file ./secret.txt STRIPE_SECRET_KEY
+
+# 3. From a pipe:
+echo -n "sk_live_..." | envgen push -c env.yaml --env stg STRIPE_SECRET_KEY
+```
+
+Modes 2 and 3 strip exactly one trailing newline so `echo "secret" > file` works. If
+`--from-file` is given, stdin is ignored.
+
+Pushing to any environment other than `local` triggers a y/N confirmation prompt that shows
+the resolved command and a masked value. Pass `--yes` to skip it (e.g. in CI). The value is
+masked in the prompt and in `--dry-run` output unless you pass `--show-secret`.
+
+Static and manual sources cannot be pushed to (errors point at the right fix). A command
+source without `push_command` errors with a copy-pasteable YAML snippet you can drop into
+your schema.
+
+Exit codes: `0` on success, `1` for local errors (bad input, missing `push_command`,
+declined confirmation, empty value), `2` if the push command itself failed or timed out.
+The split lets CI distinguish "you gave envgen bad inputs" from "the remote rejected
+the write."
 
 ## Schema format (YAML)
 
