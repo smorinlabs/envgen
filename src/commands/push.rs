@@ -58,6 +58,16 @@ fn read_value_from_stdin_pipe() -> Result<String> {
     Ok(strip_one_trailing_newline(&buf))
 }
 
+fn prompt_for_value(var_name: &str) -> Result<String> {
+    use dialoguer::Password;
+    let prompt = format!("Enter value for {}", var_name);
+    let value: String = Password::new()
+        .with_prompt(prompt)
+        .interact()
+        .context("Failed to read value from interactive prompt")?;
+    Ok(value)
+}
+
 /// Run the `push` command. Returns the process exit code.
 pub async fn run_push(opts: PushOptions) -> Result<i32> {
     let schema = match load_and_validate_schema_file(&opts.schema_path)? {
@@ -148,10 +158,7 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
     let value = match mode {
         InputMode::File(p) => read_value_from_file(&p)?,
         InputMode::StdinPipe => read_value_from_stdin_pipe()?,
-        InputMode::Prompt => {
-            // Prompt mode is implemented in Task 9.
-            bail!("push: interactive prompt not yet implemented");
-        }
+        InputMode::Prompt => prompt_for_value(&opts.var_name)?,
     };
 
     if value.is_empty() && !opts.allow_empty {
