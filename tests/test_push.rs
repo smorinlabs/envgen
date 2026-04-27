@@ -78,3 +78,68 @@ fn test_push_unknown_environment_errors() {
         .code(1)
         .stderr(predicate::str::contains("Environment \"nope\" not found"));
 }
+
+#[test]
+fn test_push_static_source_error() {
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg("tests/fixtures/push_basic.yaml")
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg("/dev/null")
+        .arg("--allow-empty")
+        .arg("--yes")
+        .arg("STATIC_VAR")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("STATIC_VAR"))
+        .stderr(predicate::str::contains("source is 'static'"))
+        .stderr(predicate::str::contains("values:"));
+}
+
+#[test]
+fn test_push_manual_source_error() {
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg("tests/fixtures/push_basic.yaml")
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg("/dev/null")
+        .arg("--allow-empty")
+        .arg("--yes")
+        .arg("MANUAL_VAR")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("MANUAL_VAR"))
+        .stderr(predicate::str::contains("source is 'manual'"))
+        .stderr(predicate::str::contains("password manager"));
+}
+
+#[test]
+fn test_push_missing_push_command_includes_yaml_snippet() {
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg("tests/fixtures/push_basic.yaml")
+        .arg("--env")
+        .arg("local")
+        .arg("--from-file")
+        .arg("/dev/null")
+        .arg("--allow-empty")
+        .arg("--yes")
+        .arg("NO_PUSH")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("NO_PUSH"))
+        .stderr(predicate::str::contains("Source 'readonly' has no push_command"))
+        .stderr(predicate::str::contains("sources:"))
+        .stderr(predicate::str::contains("readonly:"))
+        .stderr(predicate::str::contains("push_command:"));
+}

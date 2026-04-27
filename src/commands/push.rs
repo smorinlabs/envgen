@@ -57,6 +57,50 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         );
     }
 
-    // Source-branch + value-input + execution lands in later tasks.
-    bail!("push: source resolution not yet implemented");
+    let source_name = match var.effective_source_for_env(&opts.env_name) {
+        Some(s) => s.to_string(),
+        None => bail!(
+            "No source configured for variable '{}' in env '{}'",
+            opts.var_name,
+            opts.env_name
+        ),
+    };
+
+    if source_name == "static" {
+        bail!(
+            "Cannot push '{}' for env={}: source is 'static'. Static values are defined inline — edit the variable's values: block.",
+            opts.var_name,
+            opts.env_name
+        );
+    }
+
+    if source_name == "manual" {
+        bail!(
+            "Cannot push '{}' for env={}: source is 'manual'. Manual sources have no remote — store the value in your password manager.",
+            opts.var_name,
+            opts.env_name
+        );
+    }
+
+    let source = match schema.sources.get(&source_name) {
+        Some(s) => s,
+        None => bail!(
+            "Source '{}' is not defined in sources (referenced by variable '{}').",
+            source_name,
+            opts.var_name
+        ),
+    };
+
+    if source.push_command.is_none() {
+        bail!(
+            "Cannot push '{}' for env={}. Source '{}' has no push_command defined.\n\nAdd to your schema:\n  sources:\n    {}:\n      push_command: \"<e.g. gcloud secrets versions add {{key}} --data-file=- --project={{app_slug}}>\"",
+            opts.var_name,
+            opts.env_name,
+            source_name,
+            source_name
+        );
+    }
+
+    // Value input + execution lands in later tasks.
+    bail!("push: value input not yet implemented");
 }
