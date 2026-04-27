@@ -387,3 +387,160 @@ variables:
         .code(2)
         .stderr(predicate::str::contains("timed out"));
 }
+
+#[test]
+fn test_push_non_local_cancels_on_n() {
+    let tmp = TempDir::new().unwrap();
+    let value_file = tmp.path().join("v.txt");
+    fs::write(&value_file, "secret").unwrap();
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        format!(
+            r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: "{tmp}/.env.local"
+    stg: "{tmp}/.env.stg"
+environments:
+  local:
+    out_dir: "{tmp}"
+  stg:
+    out_dir: "{tmp}"
+sources:
+  fakefs:
+    command: "cat {{out_dir}}/{{key}}.txt"
+    push_command: "tee {{out_dir}}/{{key}}.txt > /dev/null"
+variables:
+  STORED:
+    description: "x"
+    source: fakefs
+"#,
+            tmp = tmp.path().display()
+        ),
+    )
+    .unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("stg")
+        .arg("--from-file")
+        .arg(&value_file)
+        .arg("STORED")
+        .write_stdin("n\n")
+        .assert()
+        .failure()
+        .code(1)
+        .stderr(predicate::str::contains("Push cancelled"));
+
+    assert!(!tmp.path().join("STORED.txt").exists());
+}
+
+#[test]
+fn test_push_non_local_yes_skips_prompt() {
+    let tmp = TempDir::new().unwrap();
+    let value_file = tmp.path().join("v.txt");
+    fs::write(&value_file, "secret-yes").unwrap();
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        format!(
+            r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: "{tmp}/.env.local"
+    stg: "{tmp}/.env.stg"
+environments:
+  local:
+    out_dir: "{tmp}"
+  stg:
+    out_dir: "{tmp}"
+sources:
+  fakefs:
+    command: "cat {{out_dir}}/{{key}}.txt"
+    push_command: "tee {{out_dir}}/{{key}}.txt > /dev/null"
+variables:
+  STORED:
+    description: "x"
+    source: fakefs
+"#,
+            tmp = tmp.path().display()
+        ),
+    )
+    .unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("stg")
+        .arg("--from-file")
+        .arg(&value_file)
+        .arg("--yes")
+        .arg("STORED")
+        .assert()
+        .success();
+
+    assert_eq!(
+        fs::read_to_string(tmp.path().join("STORED.txt")).unwrap(),
+        "secret-yes"
+    );
+}
+
+#[test]
+fn test_push_non_local_dry_run_skips_prompt() {
+    let tmp = TempDir::new().unwrap();
+    let value_file = tmp.path().join("v.txt");
+    fs::write(&value_file, "anything").unwrap();
+    let schema_path = tmp.path().join("schema.yaml");
+    fs::write(
+        &schema_path,
+        format!(
+            r#"schema_version: "2"
+metadata:
+  description: "fake"
+  destination:
+    local: "{tmp}/.env.local"
+    stg: "{tmp}/.env.stg"
+environments:
+  local:
+    out_dir: "{tmp}"
+  stg:
+    out_dir: "{tmp}"
+sources:
+  fakefs:
+    command: "cat {{out_dir}}/{{key}}.txt"
+    push_command: "tee {{out_dir}}/{{key}}.txt > /dev/null"
+variables:
+  STORED:
+    description: "x"
+    source: fakefs
+"#,
+            tmp = tmp.path().display()
+        ),
+    )
+    .unwrap();
+
+    envgen()
+        .arg("push")
+        .arg("-c")
+        .arg(&schema_path)
+        .arg("--env")
+        .arg("stg")
+        .arg("--from-file")
+        .arg(&value_file)
+        .arg("--dry-run")
+        .arg("STORED")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("environment: stg"));
+
+    // Dry run did not write the file.
+    assert!(!tmp.path().join("STORED.txt").exists());
+}

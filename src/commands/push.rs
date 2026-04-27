@@ -59,6 +59,43 @@ fn read_value_from_stdin_pipe() -> Result<String> {
     Ok(strip_one_trailing_newline(&buf))
 }
 
+fn confirm_non_local_push(
+    var_name: &str,
+    env_name: &str,
+    source_display: &str,
+    resolved_cmd: &str,
+    value: &str,
+    show_secret: bool,
+) -> Result<bool> {
+    use std::io::{self, BufRead, Write};
+
+    let displayed_value = if show_secret {
+        value.to_string()
+    } else {
+        "******** (use --show-secret to reveal)".to_string()
+    };
+
+    println!();
+    println!("About to push to non-local environment:");
+    println!("  variable:    {}", var_name);
+    println!("  environment: {}", env_name);
+    println!("  source:      {}", source_display);
+    println!("  command:     {}", resolved_cmd);
+    println!("  value:       {}", displayed_value);
+    print!("Continue? [y/N]: ");
+    io::stdout().flush().ok();
+
+    let stdin = io::stdin();
+    let mut line = String::new();
+    stdin
+        .lock()
+        .read_line(&mut line)
+        .context("Failed to read confirmation answer")?;
+
+    let answer = line.trim().to_ascii_lowercase();
+    Ok(answer == "y" || answer == "yes")
+}
+
 fn display_source(name: &str, src: &crate::schema::types::Source) -> String {
     match &src.label {
         Some(label) => format!("{} ({})", name, label),
@@ -202,6 +239,22 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         println!("command:     {}", resolved_cmd);
         println!("value:       {}", displayed);
         return Ok(0);
+    }
+
+    let needs_prompt = opts.env_name != "local" && !opts.yes && !opts.dry_run;
+    if needs_prompt {
+        let confirmed = confirm_non_local_push(
+            &opts.var_name,
+            &opts.env_name,
+            &display_source(&source_name, source),
+            &resolved_cmd,
+            &value,
+            opts.show_secret,
+        )?;
+        if !confirmed {
+            eprintln!("Push cancelled.");
+            return Ok(1);
+        }
     }
 
     match command_source::execute_command_with_stdin(&resolved_cmd, Some(&value), opts.source_timeout).await {
