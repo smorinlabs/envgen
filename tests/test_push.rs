@@ -140,7 +140,9 @@ fn test_push_missing_push_command_includes_yaml_snippet() {
         .failure()
         .code(1)
         .stderr(predicate::str::contains("NO_PUSH"))
-        .stderr(predicate::str::contains("Source 'readonly' has no push_command"))
+        .stderr(predicate::str::contains(
+            "Source 'readonly' has no push_command",
+        ))
         .stderr(predicate::str::contains("sources:"))
         .stderr(predicate::str::contains("readonly:"))
         .stderr(predicate::str::contains("push_command:"));

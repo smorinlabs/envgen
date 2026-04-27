@@ -257,7 +257,13 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         }
     }
 
-    match command_source::execute_command_with_stdin(&resolved_cmd, Some(&value), opts.source_timeout).await {
+    match command_source::execute_command_with_stdin(
+        &resolved_cmd,
+        Some(&value),
+        opts.source_timeout,
+    )
+    .await
+    {
         Ok(_) => {
             println!(
                 "{} Pushed {} to {} via {}",
@@ -271,7 +277,10 @@ pub async fn run_push(opts: PushOptions) -> Result<i32> {
         Err(e) => {
             let msg = e.to_string();
             if msg.contains("timed out") {
-                eprintln!("Push command timed out after {} seconds.", opts.source_timeout);
+                eprintln!(
+                    "Push command timed out after {} seconds.",
+                    opts.source_timeout
+                );
             } else {
                 eprintln!("Push command failed: {}", msg);
                 eprintln!("Resolved command: {}", resolved_cmd);

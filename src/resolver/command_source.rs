@@ -288,6 +288,10 @@ mod tests {
         let result = execute_command_with_stdin("cat - >&2; exit 1", Some("payload"), 30).await;
         let err = result.unwrap_err().to_string();
         assert!(err.contains("exit code 1"), "got: {}", err);
-        assert!(err.contains("payload"), "expected stderr to include piped value, got: {}", err);
+        assert!(
+            err.contains("payload"),
+            "expected stderr to include piped value, got: {}",
+            err
+        );
     }
 }

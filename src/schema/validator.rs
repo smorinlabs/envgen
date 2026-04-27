@@ -726,9 +726,9 @@ variables:
 "#;
         let errors = errors_for(yaml);
         assert!(
-            errors
-                .iter()
-                .any(|e| e.contains("push_command") && e.contains("{bogus}") && e.contains("local")),
+            errors.iter().any(|e| e.contains("push_command")
+                && e.contains("{bogus}")
+                && e.contains("local")),
             "Expected push_command placeholder error, got: {:?}",
             errors
         );
