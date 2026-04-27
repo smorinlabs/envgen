@@ -82,6 +82,44 @@ enum Commands {
         config: PathBuf,
     },
 
+    /// Push a value to a variable's source for a chosen environment
+    Push {
+        /// Path to envgen YAML config file
+        #[arg(short = 'c', long)]
+        config: PathBuf,
+
+        /// Target environment
+        #[arg(short, long)]
+        env: String,
+
+        /// Variable name to push
+        var_name: String,
+
+        /// Read the value from this file instead of stdin/prompt
+        #[arg(long)]
+        from_file: Option<PathBuf>,
+
+        /// Skip the non-local confirmation prompt
+        #[arg(short = 'y', long)]
+        yes: bool,
+
+        /// Reveal the secret value in confirmation/dry-run output
+        #[arg(long)]
+        show_secret: bool,
+
+        /// Print what would happen without executing
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+
+        /// Hard timeout in seconds for the push command
+        #[arg(long, default_value = "30")]
+        source_timeout: u64,
+
+        /// Permit pushing an empty value
+        #[arg(long)]
+        allow_empty: bool,
+    },
+
     /// Display a table of all variables defined in the schema
     List {
         /// Path to envgen YAML config file
@@ -213,6 +251,36 @@ async fn main() {
             match commands::pull::run_pull(opts).await {
                 Ok(true) => 0,
                 Ok(false) => 1,
+                Err(e) => {
+                    eprintln!("Error: {:#}", e);
+                    1
+                }
+            }
+        }
+        Commands::Push {
+            ref config,
+            ref env,
+            ref var_name,
+            ref from_file,
+            yes,
+            show_secret,
+            dry_run,
+            source_timeout,
+            allow_empty,
+        } => {
+            let opts = commands::push::PushOptions {
+                schema_path: config.clone(),
+                env_name: env.clone(),
+                var_name: var_name.clone(),
+                from_file: from_file.clone(),
+                yes,
+                show_secret,
+                dry_run,
+                source_timeout,
+                allow_empty,
+            };
+            match commands::push::run_push(opts).await {
+                Ok(code) => code,
                 Err(e) => {
                     eprintln!("Error: {:#}", e);
                     1
