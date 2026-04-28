@@ -64,9 +64,9 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 
 ## Toolchain parity policy
 
-- Rust is patch-pinned at `1.88.0` via `rust-toolchain.toml`.
-- `Cargo.toml` `rust-version` is also `1.88.0`.
-- CI/release workflows set Rust `1.88.0` explicitly to keep local and automation behavior aligned.
+- Rust is patch-pinned at `1.91.1` via `rust-toolchain.toml`.
+- `Cargo.toml` `rust-version` is also `1.91.1`.
+- CI/release workflows set Rust `1.91.1` explicitly to keep local and automation behavior aligned.
 
 ## Command reference
 
