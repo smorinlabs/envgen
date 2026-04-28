@@ -19,14 +19,9 @@ jobs:
       UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
       # Use the pre-installed biome binary instead of `npx --yes` (slow cold path).
       BIOME: biome
-      # Use mold linker for faster Rust link step.
-      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup mold linker
-        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
@@ -113,14 +108,9 @@ jobs:
   msrv:
     name: MSRV Checks
     runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup mold linker
-        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Extract MSRV from Cargo.toml
         id: msrv
@@ -155,14 +145,9 @@ jobs:
   security:
     name: Security Checks
     runs-on: ubuntu-latest
-    env:
-      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Setup mold linker
-        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable

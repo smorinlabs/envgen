@@ -19,16 +19,11 @@ jobs:
     environment: crates-io
     permissions:
       contents: read
-    env:
-      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - name: Checkout tag
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ inputs.tag }}
-
-      - name: Setup mold linker
-        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Validate tag matches Cargo.toml version
         shell: bash
