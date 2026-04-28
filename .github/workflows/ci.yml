@@ -6,10 +6,19 @@ on:
     branches:
       - main
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-core:
     name: Core Checks (Linux)
     runs-on: ubuntu-latest
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
+      # Use the pre-installed biome binary instead of `npx --yes` (slow cold path).
+      BIOME: biome
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -22,6 +31,9 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: linux-stable-1.91
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Setup Go
         uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
@@ -36,16 +48,34 @@ jobs:
       - name: Setup uv
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
 
+      - name: Cache uv tools
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .uv-cache
+            .uv-tools
+          key: uv-${{ runner.os }}-yamllint-1.38.0-jsonschema-0.36.1
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Cache .bin (yamlfmt, actionlint)
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .bin
+          key: bin-${{ runner.os }}-yamlfmt-v0.15.0
+          restore-keys: |
+            bin-${{ runner.os }}-
+
+      # Pre-install Biome and cargo-nextest as binaries (faster than npx/cargo install).
+      - name: Pre-install binary tools
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: biome@2.3.11,cargo-nextest
+
       - name: Install core check tooling
-        env:
-          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
-          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make install-tools-core
 
       - name: Run core checks
-        env:
-          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
-          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make check-core
 
   rust-macos:
@@ -63,6 +93,14 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: macos-stable-1.91
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Pre-install cargo-nextest
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: cargo-nextest
 
       - name: Run Rust checks
         run: make check-rust
@@ -90,6 +128,15 @@ jobs:
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
         with:
           cache-all-crates: true
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Pre-install cargo-msrv as a binary so the make target's `cargo install`
+      # is a no-op at the matching version. Keep version in sync with the
+      # Makefile's `install-cargo-msrv` target.
+      - name: Pre-install cargo-msrv
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: cargo-msrv@0.19.3
 
       - name: Install MSRV tooling
         run: make install-tools-msrv
@@ -111,6 +158,17 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: linux-stable-1.91
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # Pre-install security tools as binaries. Keep `typos` version in sync
+      # with the Makefile's `install-typos` target. cargo-audit and
+      # cargo-machete are unpinned in the Makefile, so we install latest here.
+      - name: Pre-install security tools
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: cargo-audit,cargo-machete,typos@1.32.0
 
       - name: Install security tooling
         run: make install-tools-security
