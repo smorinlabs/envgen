@@ -56,8 +56,13 @@ fn kill_process_group_by_pid(pid: u32) -> std::io::Result<()> {
     Err(err)
 }
 
-/// Execute a source command and return the trimmed stdout.
-pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<CommandResult> {
+/// Execute a source command, optionally piping a value into the child's stdin.
+/// Returns the trimmed stdout.
+pub async fn execute_command_with_stdin(
+    command: &str,
+    stdin_value: Option<&str>,
+    timeout_secs: u64,
+) -> Result<CommandResult> {
     enum WaitOutcome {
         Completed(std::io::Result<std::process::ExitStatus>),
         TimedOut,
@@ -68,16 +73,35 @@ pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<Command
     let mut cmd = Command::new("sh");
     cmd.arg("-c")
         .arg(command)
-        .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+
+    if stdin_value.is_some() {
+        cmd.stdin(Stdio::piped());
+    } else {
+        cmd.stdin(Stdio::null());
+    }
 
     #[cfg(unix)]
     configure_process_group(&mut cmd);
 
     let mut child = cmd.spawn().context("Failed to execute command")?;
     let pid = child.id();
+
+    if let Some(value) = stdin_value {
+        let mut stdin = child
+            .stdin
+            .take()
+            .context("Failed to capture command stdin")?;
+        let value_bytes = value.as_bytes().to_vec();
+        // Write and close so the child sees EOF and exits.
+        tokio::spawn(async move {
+            use tokio::io::AsyncWriteExt;
+            let _ = stdin.write_all(&value_bytes).await;
+            let _ = stdin.shutdown().await;
+        });
+    }
 
     let mut stdout = child
         .stdout
@@ -157,6 +181,12 @@ pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<Command
     })
 }
 
+/// Execute a source command without stdin. Thin wrapper kept so existing
+/// callers (pull) don't change.
+pub async fn execute_command(command: &str, timeout_secs: u64) -> Result<CommandResult> {
+    execute_command_with_stdin(command, None, timeout_secs).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -227,6 +257,41 @@ mod tests {
         assert!(
             !side_effect_path.exists(),
             "side effect should not run after a timeout"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_with_stdin_pipes_value() {
+        let tmp = tempdir().unwrap();
+        let out = tmp.path().join("out.txt");
+        let cmd = format!("cat > \"{}\"", out.display());
+
+        let result = execute_command_with_stdin(&cmd, Some("piped-value"), 30)
+            .await
+            .unwrap();
+        assert!(result.value.is_empty()); // stdout from `cat > file` is empty
+        let written = std::fs::read_to_string(&out).unwrap();
+        assert_eq!(written, "piped-value");
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_with_stdin_none_acts_like_old() {
+        // Regression: passing None must behave identically to the old execute_command.
+        let result = execute_command_with_stdin("echo hello", None, 30)
+            .await
+            .unwrap();
+        assert_eq!(result.value, "hello");
+    }
+
+    #[tokio::test]
+    async fn test_execute_command_with_stdin_failure_propagates_stderr() {
+        let result = execute_command_with_stdin("cat - >&2; exit 1", Some("payload"), 30).await;
+        let err = result.unwrap_err().to_string();
+        assert!(err.contains("exit code 1"), "got: {}", err);
+        assert!(
+            err.contains("payload"),
+            "expected stderr to include piped value, got: {}",
+            err
         );
     }
 }

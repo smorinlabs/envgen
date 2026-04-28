@@ -1,0 +1,38 @@
+schema_version: "2"
+metadata:
+  description: "Push test fixture"
+  destination:
+    local: ".env.local"
+    stg: ".env.stg"
+environments:
+  local:
+    out_dir: "/tmp"
+  stg:
+    out_dir: "/tmp"
+sources:
+  fakefs:
+    command: "cat {out_dir}/{key}.txt"
+    push_command: "tee {out_dir}/{key}.txt > /dev/null"
+  readonly:
+    command: "echo readonly-{key}"
+variables:
+  STORED_SECRET:
+    description: "A secret persisted to a fake file store."
+    source: fakefs
+  LOCAL_ONLY:
+    description: "Variable that only applies to local."
+    source: fakefs
+    environments: [local]
+  STATIC_VAR:
+    description: "A static variable."
+    sensitive: false
+    source: static
+    values:
+      local: "static-local"
+      stg: "static-stg"
+  MANUAL_VAR:
+    description: "A manual variable."
+    source: manual
+  NO_PUSH:
+    description: "Source has no push_command."
+    source: readonly

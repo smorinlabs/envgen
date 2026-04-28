@@ -50,6 +50,29 @@ fn format_unresolved_template_error(
     ))
 }
 
+fn check_source_template(
+    var_name: &str,
+    env_name: &str,
+    env_config: &std::collections::BTreeMap<String, String>,
+    kind: &str,
+    template_str: &str,
+    errors: &mut Vec<String>,
+) {
+    let mut available_keys: Vec<String> = env_config.keys().cloned().collect();
+    available_keys.push("key".to_string());
+    available_keys.push("environment".to_string());
+
+    let placeholders = template::extract_placeholders(template_str);
+    for ph in placeholders {
+        if !available_keys.contains(&ph) {
+            errors.push(format!(
+                "{}: source {} template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
+                var_name, kind, ph, env_name
+            ));
+        }
+    }
+}
+
 /// Validate a schema and return a list of errors. Empty list means valid.
 pub fn validate_schema(schema: &Schema) -> Vec<String> {
     let mut errors = Vec::new();
@@ -212,19 +235,23 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                     if let Some(src) = schema.sources.get(source) {
                         for env_name in &resolver.environments {
                             if let Some(env_config) = schema.environments.get(env_name) {
-                                let mut available_keys: Vec<String> =
-                                    env_config.keys().cloned().collect();
-                                available_keys.push("key".to_string());
-                                available_keys.push("environment".to_string());
-
-                                let placeholders = template::extract_placeholders(&src.command);
-                                for ph in placeholders {
-                                    if !available_keys.contains(&ph) {
-                                        errors.push(format!(
-                                            "{}: source command template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
-                                            var_name, ph, env_name
-                                        ));
-                                    }
+                                check_source_template(
+                                    var_name,
+                                    env_name,
+                                    env_config,
+                                    "command",
+                                    &src.command,
+                                    &mut errors,
+                                );
+                                if let Some(push_cmd) = &src.push_command {
+                                    check_source_template(
+                                        var_name,
+                                        env_name,
+                                        env_config,
+                                        "push_command",
+                                        push_cmd,
+                                        &mut errors,
+                                    );
                                 }
                             }
                         }
@@ -301,19 +328,23 @@ pub fn validate_schema(schema: &Schema) -> Vec<String> {
                 if let Some(src) = schema.sources.get(source) {
                     for env_name in &applicable_envs {
                         if let Some(env_config) = schema.environments.get(*env_name) {
-                            let mut available_keys: Vec<String> =
-                                env_config.keys().cloned().collect();
-                            available_keys.push("key".to_string());
-                            available_keys.push("environment".to_string());
-
-                            let placeholders = template::extract_placeholders(&src.command);
-                            for ph in placeholders {
-                                if !available_keys.contains(&ph) {
-                                    errors.push(format!(
-                                        "{}: source command template references placeholder \"{{{}}}\" which cannot be resolved for environment \"{}\".",
-                                        var_name, ph, env_name
-                                    ));
-                                }
+                            check_source_template(
+                                var_name,
+                                env_name,
+                                env_config,
+                                "command",
+                                &src.command,
+                                &mut errors,
+                            );
+                            if let Some(push_cmd) = &src.push_command {
+                                check_source_template(
+                                    var_name,
+                                    env_name,
+                                    env_config,
+                                    "push_command",
+                                    push_cmd,
+                                    &mut errors,
+                                );
                             }
                         }
                     }
@@ -671,5 +702,59 @@ variables:
         let schema = parse_schema(yaml).unwrap();
         let errors = validate_schema(&schema);
         assert!(errors.iter().any(|e| e.contains("production")));
+    }
+
+    #[test]
+    fn test_push_command_unresolved_placeholder() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local:
+    project: "test"
+sources:
+  my-source:
+    command: "echo {key} --project {project}"
+    push_command: "echo {key} --project {bogus}"
+variables:
+  FOO:
+    description: "A variable"
+    source: my-source
+"#;
+        let errors = errors_for(yaml);
+        assert!(
+            errors.iter().any(|e| e.contains("push_command")
+                && e.contains("{bogus}")
+                && e.contains("local")),
+            "Expected push_command placeholder error, got: {:?}",
+            errors
+        );
+    }
+
+    #[test]
+    fn test_push_command_valid_when_placeholders_resolve() {
+        let yaml = r#"
+schema_version: "2"
+metadata:
+  description: "Test"
+  destination:
+    local: ".env"
+environments:
+  local:
+    project: "test"
+sources:
+  my-source:
+    command: "echo {key} --project {project}"
+    push_command: "echo {key} --project {project} --data-file=-"
+variables:
+  FOO:
+    description: "A variable"
+    source: my-source
+"#;
+        let errors = errors_for(yaml);
+        assert!(errors.is_empty(), "Expected no errors, got: {:?}", errors);
     }
 }

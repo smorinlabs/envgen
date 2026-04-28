@@ -20,7 +20,7 @@ YAML_FIXTURES := $(shell find tests/fixtures -type f \( -name '*.yaml' -o -name 
 SCHEMA_ARTIFACT_VERSION := $(shell tr -d '\r\n' < SCHEMA_VERSION)
 SCHEMA_FILE := schemas/envgen.schema.v$(SCHEMA_ARTIFACT_VERSION).json
 VERSION_BUMP_SCRIPT := scripts/version_bump.py
-RUST_TOOLCHAIN_PIN ?= 1.88.0
+RUST_TOOLCHAIN_PIN ?= 1.91.1
 HOMEBREW_TAP_SCRIPT := scripts/homebrew/tap_release.py
 HOMEBREW_SOURCE_REPO ?= smorinlabs/envgen
 HOMEBREW_TAP_REPO ?= smorinlabs/homebrew-tap
@@ -100,7 +100,7 @@ install-cargo-machete: ## Install cargo-machete
 .PHONY: install-cargo-msrv
 install-cargo-msrv: ## Install cargo-msrv
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-msrv --locked
+	cargo install cargo-msrv@0.19.3 --locked
 
 .PHONY: install-typos
 install-typos: ## Install typos-cli
@@ -180,7 +180,7 @@ check-security: check-tools-security ## Security/dependency checks
 	typos
 
 .PHONY: sync-lockfile
-sync-lockfile: ## Regenerate Cargo.lock using pinned Rust toolchain (1.88.0)
+sync-lockfile: ## Regenerate Cargo.lock using pinned Rust toolchain (1.91.1)
 	@if command -v rustup >/dev/null 2>&1; then \
 		rustup run $(RUST_TOOLCHAIN_PIN) cargo generate-lockfile && exit 0; \
 		echo "WARN: rustup run $(RUST_TOOLCHAIN_PIN) cargo generate-lockfile failed; retrying with cargo +$(RUST_TOOLCHAIN_PIN)." >&2; \
@@ -188,7 +188,7 @@ sync-lockfile: ## Regenerate Cargo.lock using pinned Rust toolchain (1.88.0)
 	cargo +$(RUST_TOOLCHAIN_PIN) generate-lockfile
 
 .PHONY: check-lockfile
-check-lockfile: ## Validate lockfile parity using pinned Rust toolchain (1.88.0)
+check-lockfile: ## Validate lockfile parity using pinned Rust toolchain (1.91.1)
 	@if command -v rustup >/dev/null 2>&1; then \
 		rustup run $(RUST_TOOLCHAIN_PIN) cargo check --locked && exit 0; \
 		echo "WARN: rustup run $(RUST_TOOLCHAIN_PIN) cargo check --locked failed; retrying with cargo +$(RUST_TOOLCHAIN_PIN)." >&2; \
