@@ -130,16 +130,14 @@ jobs:
           cache-all-crates: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Pre-install cargo-msrv as a binary so the make target's `cargo install`
-      # is a no-op at the matching version. Keep version in sync with the
+      # Pre-install cargo-msrv as a binary; replaces `make install-tools-msrv`
+      # (which would `cargo install` from source). check-msrv validates the
+      # binary is on PATH via check-tools-msrv. Keep version in sync with the
       # Makefile's `install-cargo-msrv` target.
       - name: Pre-install cargo-msrv
         uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
         with:
           tool: cargo-msrv@0.19.3
-
-      - name: Install MSRV tooling
-        run: make install-tools-msrv
 
       - name: Run MSRV checks
         run: make check-msrv
@@ -162,16 +160,15 @@ jobs:
           shared-key: linux-stable-1.91
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
-      # Pre-install security tools as binaries. Keep `typos` version in sync
-      # with the Makefile's `install-typos` target. cargo-audit and
-      # cargo-machete are unpinned in the Makefile, so we install latest here.
+      # Pre-install security tools as binaries; replaces
+      # `make install-tools-security` (which would `cargo install` from source
+      # and fail with "binary already exists" because cargo-audit/cargo-machete
+      # are unpinned in the Makefile). check-security validates binaries are on
+      # PATH via check-tools-security.
       - name: Pre-install security tools
         uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
         with:
           tool: cargo-audit,cargo-machete,typos@1.32.0
-
-      - name: Install security tooling
-        run: make install-tools-security
 
       - name: Run security checks
         run: make check-security

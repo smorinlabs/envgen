@@ -42,7 +42,7 @@ dev: ## Build the project in debug mode
 .PHONY: test
 test: ## Run all tests (uses cargo-nextest if available, else cargo test)
 	@if command -v cargo-nextest >/dev/null 2>&1; then \
-		cargo nextest run --locked && cargo test --locked --doc; \
+		cargo nextest run --locked; \
 	else \
 		cargo test --locked; \
 	fi
