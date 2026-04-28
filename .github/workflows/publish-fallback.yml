@@ -40,6 +40,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: linux-stable-1.91
 
       - name: Verify publish payload (dry run)
         env:

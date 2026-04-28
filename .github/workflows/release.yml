@@ -57,12 +57,18 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
+        include:
+          - os: ubuntu-latest
+            shared-key: linux-stable-1.91
+          - os: macos-latest
+            shared-key: macos-stable-1.91
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+    env:
+      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
+      BIOME: biome
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -77,6 +83,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: ${{ matrix.shared-key }}
 
       - name: Setup Go
         if: ${{ matrix.os == 'ubuntu-latest' }}
@@ -94,18 +102,44 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: astral-sh/setup-uv@caf0cab7a618c569241d31dcd442f54681755d39 # v3
 
+      - name: Cache uv tools (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: |
+            .uv-cache
+            .uv-tools
+          key: uv-${{ runner.os }}-yamllint-1.38.0-jsonschema-0.36.1
+          restore-keys: |
+            uv-${{ runner.os }}-
+
+      - name: Cache .bin (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: .bin
+          key: bin-${{ runner.os }}-yamlfmt-v0.15.0
+          restore-keys: |
+            bin-${{ runner.os }}-
+
+      - name: Pre-install Linux binary tools
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: biome@2.3.11,cargo-nextest
+
+      - name: Pre-install macOS binary tools
+        if: ${{ matrix.os == 'macos-latest' }}
+        uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
+        with:
+          tool: cargo-nextest
+
       - name: Install core check tooling (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        env:
-          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
-          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make install-tools-core
 
       - name: Run core checks (Linux)
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        env:
-          UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
-          UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
         run: make check-core
 
       - name: Run Rust checks (macOS)
@@ -133,6 +167,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: linux-stable-1.91
 
       - name: Authenticate with crates.io (trusted publishing)
         id: crates-auth
@@ -236,10 +272,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os:
-          - ubuntu-latest
-          - macos-latest
-          - windows-latest
+        include:
+          - os: ubuntu-latest
+            shared-key: linux-stable-1.91-release
+          - os: macos-latest
+            shared-key: macos-stable-1.91-release
+          - os: windows-latest
+            shared-key: windows-stable-1.91-release
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
@@ -256,6 +295,8 @@ jobs:
 
       - name: Rust cache
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2
+        with:
+          shared-key: ${{ matrix.shared-key }}
 
       - name: Build
         run: cargo build --release --locked
