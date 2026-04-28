@@ -60,8 +60,10 @@ jobs:
         include:
           - os: ubuntu-latest
             shared-key: linux-stable-1.91
+            rustflags: "-C link-arg=-fuse-ld=mold"
           - os: macos-latest
             shared-key: macos-stable-1.91
+            rustflags: ""
     runs-on: ${{ matrix.os }}
     permissions:
       contents: read
@@ -69,11 +71,16 @@ jobs:
       UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
       UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
       BIOME: biome
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
+
+      - name: Setup mold linker (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
@@ -154,11 +161,16 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      RUSTFLAGS: "-C link-arg=-fuse-ld=mold"
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
+
+      - name: Setup mold linker
+        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
@@ -275,18 +287,27 @@ jobs:
         include:
           - os: ubuntu-latest
             shared-key: linux-stable-1.91-release
+            rustflags: "-C link-arg=-fuse-ld=mold"
           - os: macos-latest
             shared-key: macos-stable-1.91-release
+            rustflags: ""
           - os: windows-latest
             shared-key: windows-stable-1.91-release
+            rustflags: ""
     runs-on: ${{ matrix.os }}
     permissions:
       contents: write
+    env:
+      RUSTFLAGS: ${{ matrix.rustflags }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           ref: ${{ needs.meta.outputs.tag }}
+
+      - name: Setup mold linker (Linux)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        uses: rui314/setup-mold@9c9c13bf4c3f1adef0cc596abc155580bcb04444 # v1
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@4be9e76fd7c4901c61fb841f559994984270fce7 # stable
