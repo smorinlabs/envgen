@@ -94,12 +94,12 @@ install-rust-tools: ## Install Rust components (rustfmt, clippy)
 .PHONY: install-cargo-audit
 install-cargo-audit: ## Install cargo-audit
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-audit --locked
+	cargo install cargo-audit@0.22.1 --locked
 
 .PHONY: install-cargo-machete
 install-cargo-machete: ## Install cargo-machete
 	@command -v cargo >/dev/null 2>&1 || { echo "ERROR: cargo not found. Install Rust from https://rustup.rs/."; exit 1; }
-	cargo install cargo-machete --locked
+	cargo install cargo-machete@0.9.2 --locked
 
 .PHONY: install-cargo-msrv
 install-cargo-msrv: ## Install cargo-msrv

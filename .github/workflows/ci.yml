@@ -161,14 +161,14 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # Pre-install security tools as binaries; replaces
-      # `make install-tools-security` (which would `cargo install` from source
-      # and fail with "binary already exists" because cargo-audit/cargo-machete
-      # are unpinned in the Makefile). check-security validates binaries are on
-      # PATH via check-tools-security.
+      # `make install-tools-security`. check-security validates binaries are on
+      # PATH via check-tools-security. Versions kept in sync with the
+      # Makefile's `install-cargo-audit`, `install-cargo-machete`, and
+      # `install-typos` targets.
       - name: Pre-install security tools
         uses: taiki-e/install-action@481c34c1cf3a84c68b5e46f4eccfc82af798415a # v2
         with:
-          tool: cargo-audit,cargo-machete,typos@1.32.0
+          tool: cargo-audit@0.22.1,cargo-machete@0.9.2,typos@1.32.0
 
       - name: Run security checks
         run: make check-security
