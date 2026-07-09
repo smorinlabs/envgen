@@ -21,15 +21,24 @@ Move the selected Linux and macOS jobs to Blacksmith runner labels while keeping
 every other step, permission, and release behavior unchanged:
 
 - Linux jobs: `ubuntu-latest` -> `blacksmith-4vcpu-ubuntu-2404` (CI core/MSRV/
-  security checks, conventional-commits validation, release metadata/publish/
-  GitHub-release/dispatch jobs, and the crates.io publish fallback).
+  security checks, conventional-commits validation, and the release
+  metadata/publish/GitHub-release/dispatch jobs).
 - macOS jobs: `macos-latest` -> `blacksmith-6vcpu-macos-latest` (the CI Rust
   macOS check, the Homebrew tap PR workflow, and the release homebrew-core bump
   job). The `-macos-latest` label is used rather than a pinned `-macos-15` so
   these jobs keep tracking the latest macOS image, preserving the semantics of
   the original `macos-latest` labels.
-- The `release.yml` `verify`/`build` matrices remain on GitHub-hosted
-  `macos-latest`; they were intentionally left out of this migration's scope.
+- Keep `publish-fallback.yml` on GitHub-hosted `ubuntu-latest`, not Blacksmith.
+  `RELEASING.md` documents it as the temporary emergency fallback for release
+  safety, so it must stay an independent recovery path: if Blacksmith is
+  unavailable or misconfigured, the token fallback must not fail together with
+  the Blacksmith-hosted trusted-publishing path.
+- The `release.yml` `verify`/`build` matrices are not migrated to Blacksmith and
+  stay GitHub-hosted, but their Ubuntu entries are pinned from `ubuntu-latest` to
+  `ubuntu-24.04` so the release path tests the same Ubuntu image as the pinned
+  Blacksmith PR check (`blacksmith-4vcpu-ubuntu-2404`), preventing Ubuntu version
+  drift between PR CI and tag releases. Their `macos-latest` entries are left
+  unchanged, matching the CI macOS check that also tracks latest.
 - Register the custom Blacksmith labels in `.github/actionlint.yaml` so
   `make lint-actions` (actionlint) does not reject them as unknown runner labels.
 
@@ -39,11 +48,14 @@ every other step, permission, and release behavior unchanged:
   richer observability, with no change to the checks or release logic they run.
 - macOS jobs continue to track the latest macOS image, so PR CI and the release
   path stay aligned on macOS version rather than diverging via a pinned tag.
-- `runs-on:` labels are now Blacksmith-specific and require the Blacksmith GitHub
-  App to be installed on the repository; the actionlint config must list any new
-  Blacksmith labels introduced later.
-- The GitHub-hosted `verify`/`build` release matrices are unchanged, so their
-  cost/performance profile is unaffected by this ADR.
+- Blacksmith `runs-on:` labels require the Blacksmith GitHub App to be installed
+  on the repository; the actionlint config must list any new Blacksmith labels
+  introduced later.
+- The token publish fallback retains an infrastructure-independent recovery path,
+  so a Blacksmith outage cannot take out both crates.io publish routes at once.
+- Release Ubuntu builds are now pinned to `ubuntu-24.04` instead of tracking
+  `ubuntu-latest`, so they will not silently move to a newer image (e.g. when
+  `ubuntu-latest` advances) ahead of the PR check that gates them.
 
 ## Alternatives considered
 
@@ -53,9 +65,12 @@ every other step, permission, and release behavior unchanged:
 2. Keep all workflows on GitHub-hosted runners.
    - Rejected: forgoes the speed, cost, cache, and observability benefits with no
      offsetting advantage.
-3. Migrate the release `verify`/`build` matrices in the same change.
+3. Migrate the release `verify`/`build` matrices to Blacksmith in the same change.
    - Deferred: out of scope for this runner-only migration; can be revisited
-     separately.
+     separately. Only their Ubuntu image is pinned to `ubuntu-24.04` for parity.
+4. Migrate `publish-fallback.yml` to Blacksmith alongside the primary path.
+   - Rejected: it is the emergency recovery path and must stay independent of
+     Blacksmith infrastructure.
 
 ## References/links
 
@@ -65,4 +80,5 @@ every other step, permission, and release behavior unchanged:
 - `.github/workflows/homebrew-tap-pr.yml`
 - `.github/workflows/publish-fallback.yml`
 - `.github/workflows/release.yml`
+- `RELEASING.md` (Emergency fallback section)
 - https://docs.blacksmith.sh/blacksmith-runners/overview#runner-tags
