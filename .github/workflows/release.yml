@@ -333,7 +333,7 @@ jobs:
   homebrew-core:
     name: Open homebrew-core bump PR
     needs: [meta, verify, publish-crates]
-    runs-on: blacksmith-6vcpu-macos-15
+    runs-on: blacksmith-6vcpu-macos-latest
     permissions:
       contents: read
     env:
