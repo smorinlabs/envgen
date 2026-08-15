@@ -79,6 +79,8 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make check-lockfile`
 - `make precommit-fast`
 - `make prepush-full`
+- `make lefthook-install`
+- `make lefthook-run`
 - `make bump-crate LEVEL=patch|minor|major`
 - `make bump-crate VERSION=X.Y.Z`
 - `make bump-crate-patch|bump-crate-minor|bump-crate-major`
@@ -185,7 +187,12 @@ Next:
 ## Local contributor workflow
 
 1. Install git hooks once:
-   - `make pre-commit-setup`
+   - `make lefthook-install`
+   - Existing clones that previously ran `make pre-commit-setup` must run this
+     too. Their `.git/hooks/pre-commit` and `pre-push` still invoke `pre-commit`
+     against the deleted `.pre-commit-config.yaml` and will fail on the next
+     commit or push. `lefthook install` renames the stale hooks to `*.old` and
+     replaces them.
 2. Run fast checks when iterating:
    - `make precommit-fast`
 3. Run full checks before pushing:
