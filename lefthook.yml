@@ -1,0 +1,26 @@
+---
+# lefthook.yml — Git hook configuration. Hook manager per ADR-0017.
+#
+# These hooks are deliberately thin. Per ADR-0012 the Makefile is the single
+# source of truth for quality gates, and every automation layer — CI, release,
+# and local hooks — calls the same targets. Add or change checks in the
+# Makefile (`precommit-fast` / `prepush-full`), never here.
+#
+#   make lefthook-install    install lefthook and wire .git/hooks
+#   make lefthook-run        run the pre-commit gate manually
+#   make precommit-fast      run the same checks without lefthook
+#   LEFTHOOK=0 git commit    bypass hooks for a single command
+#
+# Docs: https://lefthook.dev/configuration/
+
+min_version: 2.0.0
+
+pre-commit:
+  commands:
+    precommit-fast:
+      run: make precommit-fast
+
+pre-push:
+  commands:
+    prepush-full:
+      run: make prepush-full

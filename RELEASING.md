@@ -79,6 +79,8 @@ This mapping must match the publish job in `.github/workflows/release.yml` exact
 - `make check-lockfile`
 - `make precommit-fast`
 - `make prepush-full`
+- `make lefthook-install`
+- `make lefthook-run`
 - `make bump-crate LEVEL=patch|minor|major`
 - `make bump-crate VERSION=X.Y.Z`
 - `make bump-crate-patch|bump-crate-minor|bump-crate-major`
@@ -185,7 +187,7 @@ Next:
 ## Local contributor workflow
 
 1. Install git hooks once:
-   - `make pre-commit-setup`
+   - `make lefthook-install`
 2. Run fast checks when iterating:
    - `make precommit-fast`
 3. Run full checks before pushing:

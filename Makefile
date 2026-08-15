@@ -114,20 +114,16 @@ install-typos: ## Install typos-cli
 .PHONY: install-cargo-tools
 install-cargo-tools: install-cargo-audit install-cargo-machete install-cargo-msrv install-typos ## Install all cargo tools
 
-.PHONY: install-pre-commit
-install-pre-commit: ## Install pre-commit (prefers uv, then pipx, then brew, then pip)
-	@if command -v pre-commit >/dev/null 2>&1; then \
-		echo "pre-commit already installed."; \
-	elif command -v $(UV) >/dev/null 2>&1; then \
-		UV_CACHE_DIR=$(UV_CACHE_DIR) UV_TOOL_DIR=$(UV_TOOL_DIR) $(UV) tool install pre-commit; \
-	elif command -v pipx >/dev/null 2>&1; then \
-		pipx install pre-commit; \
+.PHONY: install-lefthook
+install-lefthook: ## Install lefthook (prefers brew, then the official install script)
+	@if command -v lefthook >/dev/null 2>&1; then \
+		echo "lefthook already installed."; \
 	elif command -v brew >/dev/null 2>&1; then \
-		brew install pre-commit; \
-	elif command -v pip >/dev/null 2>&1; then \
-		pip install --user pre-commit; \
+		brew install lefthook; \
+	elif command -v curl >/dev/null 2>&1; then \
+		curl -1sLf 'https://raw.githubusercontent.com/evilmartians/lefthook/master/install.sh' | sh; \
 	else \
-		echo "ERROR: pre-commit not found. Install with: uv tool install pre-commit (recommended), or brew install pre-commit, or pipx install pre-commit."; \
+		echo "ERROR: lefthook not found. Install with: brew install lefthook (recommended), or see https://lefthook.dev/installation/."; \
 		exit 1; \
 	fi
 
@@ -221,17 +217,14 @@ check-release: ## Release readiness checks
 install: ## Install envgen to ~/.cargo/bin
 	cargo install --path .
 
-# ─── Pre-commit ────────────────────────────────────────────────
+# ─── Git Hooks (lefthook) ──────────────────────────────────────
 
-.PHONY: pre-commit-setup pre-commit-staged pre-commit-all precommit-fast prepush-full
-pre-commit-setup: install-pre-commit ## Install git pre-commit/pre-push hooks
-	pre-commit install --hook-type pre-commit --hook-type pre-push
+.PHONY: lefthook-install lefthook-run precommit-fast prepush-full
+lefthook-install: install-lefthook ## Install git pre-commit/pre-push hooks
+	lefthook install
 
-pre-commit-staged: install-pre-commit ## Run pre-commit hooks on staged files
-	pre-commit run --hook-stage pre-commit
-
-pre-commit-all: install-pre-commit ## Run pre-commit hooks on all files
-	pre-commit run --hook-stage pre-commit --all-files
+lefthook-run: install-lefthook ## Run the pre-commit hook gate manually
+	lefthook run pre-commit --all-files
 
 precommit-fast: check-tools-core check-code lint-actions check-package-contents ## Fast local checks for commit hooks
 
