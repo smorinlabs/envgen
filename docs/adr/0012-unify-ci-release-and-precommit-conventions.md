@@ -1,6 +1,14 @@
 # 0012: Unify CI, release, and pre-commit quality gate conventions
 Date: 2026-02-16
-Status: Accepted
+Status: Accepted — hook-manager choice superseded by ADR-0017
+
+> The hook manager named below is superseded by
+> [ADR-0017](0017-adopt-lefthook-as-git-hook-manager.md), which replaced
+> `pre-commit` with lefthook and deleted `.pre-commit-config.yaml`. Everything
+> else in this record remains in force — the Makefile is still the single source
+> of truth for quality gates, and CI, release, and local hooks still call those
+> targets. Read "pre-commit stage" and "pre-push stage" below as the lefthook
+> stages of the same names.
 
 ## Context
 

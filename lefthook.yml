@@ -3,8 +3,10 @@
 #
 # These hooks are deliberately thin. Per ADR-0012 the Makefile is the single
 # source of truth for quality gates, and every automation layer — CI, release,
-# and local hooks — calls the same targets. Add or change checks in the
-# Makefile (`precommit-fast` / `prepush-full`), never here.
+# and local hooks — runs shared Makefile checks. The hooks call the aggregate
+# targets `precommit-fast` and `prepush-full`; CI calls the underlying
+# `check-core`, `check-rust`, `check-msrv`, and `check-security` directly.
+# Add or change checks in the Makefile, never here.
 #
 #   make lefthook-install    install lefthook and wire .git/hooks
 #   make lefthook-run        run the pre-commit gate manually

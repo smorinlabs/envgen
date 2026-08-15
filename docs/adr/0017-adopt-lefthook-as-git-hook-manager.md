@@ -1,8 +1,6 @@
-# ADR 0017: Adopt lefthook as the git hook manager
-
-## Status
-
-Accepted — 2026-08-15
+# 0017: Adopt lefthook as the git hook manager
+Date: 2026-08-15
+Status: Accepted
 
 Supersedes the hook-manager portion of ADR-0012. The rest of ADR-0012 — the
 Makefile as the single source of truth for quality gates, and every automation
@@ -117,8 +115,8 @@ Check definitions stay in the Makefile. New checks are added to
 
 ## References/links
 
-- `/Users/stevemorin/c/envgen/lefthook.yml`
-- `/Users/stevemorin/c/envgen/Makefile`
-- `/Users/stevemorin/c/envgen/RELEASING.md`
+- `lefthook.yml`
+- `Makefile`
+- `RELEASING.md`
 - `docs/adr/0012-unify-ci-release-and-precommit-conventions.md`
 - lefthook configuration reference: https://lefthook.dev/configuration/

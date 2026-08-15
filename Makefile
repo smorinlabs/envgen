@@ -115,15 +115,13 @@ install-typos: ## Install typos-cli
 install-cargo-tools: install-cargo-audit install-cargo-machete install-cargo-msrv install-typos ## Install all cargo tools
 
 .PHONY: install-lefthook
-install-lefthook: ## Install lefthook (prefers brew, then the official install script)
+install-lefthook: ## Install lefthook (via brew; otherwise fails with install guidance)
 	@if command -v lefthook >/dev/null 2>&1; then \
 		echo "lefthook already installed."; \
 	elif command -v brew >/dev/null 2>&1; then \
 		brew install lefthook; \
-	elif command -v curl >/dev/null 2>&1; then \
-		curl -1sLf 'https://raw.githubusercontent.com/evilmartians/lefthook/master/install.sh' | sh; \
 	else \
-		echo "ERROR: lefthook not found. Install with: brew install lefthook (recommended), or see https://lefthook.dev/installation/."; \
+		echo "ERROR: lefthook not found. Install with: brew install lefthook (recommended), or see https://lefthook.dev/install/."; \
 		exit 1; \
 	fi
 

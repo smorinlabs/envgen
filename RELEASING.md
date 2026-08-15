@@ -188,6 +188,11 @@ Next:
 
 1. Install git hooks once:
    - `make lefthook-install`
+   - Existing clones that previously ran `make pre-commit-setup` must run this
+     too. Their `.git/hooks/pre-commit` and `pre-push` still invoke `pre-commit`
+     against the deleted `.pre-commit-config.yaml` and will fail on the next
+     commit or push. `lefthook install` renames the stale hooks to `*.old` and
+     replaces them.
 2. Run fast checks when iterating:
    - `make precommit-fast`
 3. Run full checks before pushing:
