@@ -44,8 +44,13 @@ exactly.
 - Set `min_version: 2.0.0`, consistent with the version-pinning convention
   already applied to `cargo-audit@0.22.1`, `cargo-machete@0.9.2`,
   `cargo-msrv@0.19.3`, `typos-cli@1.32.0`, and `yamlfmt@v0.15.0`.
-- Replace `make install-pre-commit` with `make install-lefthook` (Homebrew
-  first, then the official install script — the pattern used by `worktreeflow`).
+- Replace `make install-pre-commit` with `make install-lefthook`. Installation is
+  deliberately Homebrew-only: lefthook 2.x removed the `install.sh` that
+  `worktreeflow`'s equivalent target still pipes into `sh`, so that URL now
+  returns 404, and piping an unpinned remote script hides download failures
+  because `sh` exits 0 on empty input. Without Homebrew the target fails with a
+  pointer to <https://lefthook.dev/install/>, matching how `install-node`
+  already handles a tool it cannot install itself.
 - Replace the three `pre-commit-*` targets with two `lefthook-*` targets:
   - `make pre-commit-setup` → `make lefthook-install`
   - `make pre-commit-staged` and `make pre-commit-all` → `make lefthook-run`
