@@ -1,4 +1,4 @@
-# 0017: Migrate CI and release workflows to Blacksmith runners
+# 0018: Migrate CI and release workflows to Blacksmith runners
 Date: 2026-07-09
 Status: Accepted
 
