@@ -367,6 +367,117 @@ Docs:
   - Symptom: workflow step `Validate tap token permissions` fails with `::error::` output.
   - Fix: follow `Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)` in this document.
 
+## If Blacksmith is unavailable at release time
+
+Every `release.yml` job runs on Blacksmith runners, and the first job (`meta`,
+which resolves and validates the tag) is one of them. Every other release job
+declares `needs: meta`. Blacksmith is therefore a single point of failure for
+releases: one component whose unavailability stops everything downstream. If the
+Blacksmith GitHub App is uninstalled, capacity is unavailable, or a runner label
+stops matching, no release job starts at all. See ADR-0019.
+
+**Symptom:** after pushing a `v*.*.*` tag, the Release workflow shows every job
+queued and none starting, indefinitely. Jobs waiting on an unavailable runner
+label queue rather than fail, so there is no error message to read.
+
+**Confirm it is a runner problem, not a workflow problem:**
+
+```bash
+gh run list --repo smorinlabs/envgen --workflow release.yml --limit 1
+gh run view <run-id> --repo smorinlabs/envgen
+```
+
+Queued jobs with no logs and no annotations mean no runner picked the job up.
+That has three distinct causes, and they are not distinguishable from the run
+page alone:
+
+- **No runner available** — the Blacksmith GitHub App was uninstalled or removed
+  from this repository. Check the app's repository access in GitHub settings.
+- **Capacity exhausted** — runners exist but none are free. Check the Blacksmith
+  dashboard at <https://app.blacksmith.sh> for queue depth and concurrency
+  limits.
+- **Label mismatch** — the `runs-on:` value does not match any label Blacksmith
+  offers, for example after a typo or a renamed image. Compare the labels in
+  `.github/workflows/` against
+  <https://docs.blacksmith.sh/blacksmith-runners/overview>.
+
+Check all three before concluding the outage is on Blacksmith's side; a label
+mismatch is a repository bug that will not resolve on its own.
+
+**What still works, and what does not:**
+
+| Release step | During a Blacksmith outage |
+| --- | --- |
+| Publish to crates.io | Available — dispatch `publish-fallback.yml` (GitHub-hosted) |
+| Create the GitHub release | Blocked — no independent path |
+| Build and upload binaries | Blocked — `build` waits on `github-release` |
+| Homebrew tap PR | Blocked — no independent path |
+| homebrew-core bump PR | Blocked — no independent path |
+
+**Recovery, in order:**
+
+1. Publish the crate so downstream consumers are unblocked. From the Actions
+   tab, run **Publish Fallback (Token)** with the tag, for example `v1.0.7`.
+   This runs on GitHub-hosted `ubuntu-latest` and does not touch Blacksmith.
+   It requires the `CARGO_REGISTRY_TOKEN` secret in the `crates-io` environment.
+2. **Deal with the original queued run before starting another.** The tag-push
+   run does not disappear during the outage — it stays queued and becomes
+   runnable the moment Blacksmith returns. The concurrency group is
+   `release-${{ github.workflow }}-${{ github.event_name }}-…`, and because it
+   includes `github.event_name`, a push-triggered run and a manually dispatched
+   run land in **different groups** and do not serialize, even though
+   `cancel-in-progress` is `false`. Two concurrent runs would both create or
+   update the release, overwrite the same assets, and repeat the Homebrew
+   dispatches.
+
+   Pick one path, never both:
+
+   - **Preferred — let the original run finish.** Once Blacksmith recovers, the
+     queued run proceeds on its own. Watch it rather than starting a second one:
+
+     ```bash
+     gh run watch <run-id> --repo smorinlabs/envgen
+     ```
+
+   - **Or cancel it first, then dispatch a replacement.** Only if the queued run
+     is unusable, for example because it predates a workflow fix:
+
+     ```bash
+     gh run cancel <run-id> --repo smorinlabs/envgen
+     ```
+
+     Confirm it reads `cancelled` before dispatching **Release** with the same
+     tag from the Actions tab. `publish-crates` is idempotent, so a crate
+     already published in step 1 does not cause a failure.
+
+3. Only if waiting is not acceptable, produce the GitHub release by hand.
+
+   **Run these on a machine matching the asset you intend to publish.** The
+   commands below build a *native* binary and are written for Apple Silicon
+   macOS. Running them elsewhere while keeping the `macOS-ARM64` name publishes
+   a mislabeled, unusable asset — and on Windows the binary is `envgen.exe`, not
+   `envgen`.
+
+   ```bash
+   git checkout v1.0.7
+   cargo build --release --locked
+   tar -czf envgen-v1.0.7-macOS-ARM64.tar.gz -C target/release envgen
+   gh release create v1.0.7 --repo smorinlabs/envgen \
+     --title v1.0.7 --generate-notes envgen-v1.0.7-macOS-ARM64.tar.gz
+   ```
+
+   Each host produces only its own platform's binary, so a full asset set needs
+   one run per platform. Names must match the `envgen-<tag>-<os>-<arch>` pattern
+   the automated build produces, where `<os>` is `Linux`, `macOS`, or `Windows`
+   and `<arch>` is `X64` or `ARM64` — the same values GitHub Actions reports as
+   `runner.os` and `runner.arch`. Substitute both to match the build host rather
+   than copying the macOS names above.
+
+**Do not "fix" this by moving jobs back to GitHub-hosted runners under time
+pressure.** The hosting split that existed before ADR-0019 did not survive an
+outage either, because `meta` was already Blacksmith-hosted and everything
+waits on it.
+
 ## Emergency fallback (temporary)
 
 For migration safety, token-based publish remains available through
