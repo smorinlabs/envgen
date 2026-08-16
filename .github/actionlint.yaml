@@ -1,0 +1,7 @@
+self-hosted-runner:
+  # Blacksmith runner labels are custom self-hosted runner labels that
+  # actionlint does not know about by default. Declaring them here keeps
+  # `actionlint` (via `make lint-actions`) from flagging `runs-on:` values.
+  labels:
+    - blacksmith-4vcpu-ubuntu-2404
+    - blacksmith-6vcpu-macos-latest

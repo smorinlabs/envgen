@@ -13,7 +13,7 @@ concurrency:
 jobs:
   check-core:
     name: Core Checks (Linux)
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     env:
       UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
       UV_TOOL_DIR: ${{ github.workspace }}/.uv-tools
@@ -80,7 +80,7 @@ jobs:
 
   rust-macos:
     name: Rust Checks (macOS)
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-latest
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -107,7 +107,7 @@ jobs:
 
   msrv:
     name: MSRV Checks
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -144,7 +144,7 @@ jobs:
 
   security:
     name: Security Checks
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

@@ -17,7 +17,7 @@ jobs:
     name: Update homebrew tap formula
     # Formula verification calls `brew style/audit/install/test`, so run on macOS
     # where Homebrew is available by default on GitHub-hosted runners.
-    runs-on: macos-latest
+    runs-on: blacksmith-6vcpu-macos-latest
     permissions:
       contents: read
     env:

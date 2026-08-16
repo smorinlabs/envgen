@@ -15,6 +15,10 @@ concurrency:
 jobs:
   publish:
     name: Publish to crates.io via token fallback
+    # Keep this emergency fallback on a GitHub-hosted runner so it stays an
+    # independent recovery path: if Blacksmith is unavailable or misconfigured,
+    # both the trusted-publishing path and this token fallback must not fail
+    # together. See RELEASING.md "Emergency fallback (temporary)".
     runs-on: ubuntu-latest
     environment: crates-io
     permissions:
