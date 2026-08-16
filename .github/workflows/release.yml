@@ -56,13 +56,19 @@ jobs:
     needs: meta
     strategy:
       fail-fast: false
+      # `os` stays the identity key: it names the check (`Verify (ubuntu-24.04)`)
+      # and gates the per-platform `if: matrix.os == ...` steps below. `runner`
+      # selects the machine. Keeping them separate means the runner can move to
+      # Blacksmith without rewriting every conditional. See ADR-0019.
       matrix:
         include:
           - os: ubuntu-24.04
+            runner: blacksmith-4vcpu-ubuntu-2404
             shared-key: linux-stable-1.91
           - os: macos-latest
+            runner: blacksmith-6vcpu-macos-latest
             shared-key: macos-stable-1.91
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
     env:
@@ -271,15 +277,22 @@ jobs:
     needs: [meta, github-release]
     strategy:
       fail-fast: false
+      # Same `os` / `runner` split as the verify matrix above (ADR-0019).
+      # `windows-2025` rather than `windows-latest`: Blacksmith publishes no
+      # `-windows-latest` alias, only versioned Windows images, so the identity
+      # key is pinned to match the runner instead of claiming to track latest.
       matrix:
         include:
           - os: ubuntu-24.04
+            runner: blacksmith-4vcpu-ubuntu-2404
             shared-key: linux-stable-1.91-release
           - os: macos-latest
+            runner: blacksmith-6vcpu-macos-latest
             shared-key: macos-stable-1.91-release
-          - os: windows-latest
+          - os: windows-2025
+            runner: blacksmith-4vcpu-windows-2025
             shared-key: windows-stable-1.91-release
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: write
     steps:

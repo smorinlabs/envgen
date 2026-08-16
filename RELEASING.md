@@ -367,6 +367,66 @@ Docs:
   - Symptom: workflow step `Validate tap token permissions` fails with `::error::` output.
   - Fix: follow `Reset HOMEBREW_TAP_GITHUB_TOKEN (step-by-step)` in this document.
 
+## If Blacksmith is unavailable at release time
+
+Every `release.yml` job runs on Blacksmith runners, and the first job (`meta`,
+which resolves and validates the tag) is one of them. Every other release job
+declares `needs: meta`. Blacksmith is therefore a single point of failure for
+releases: one component whose unavailability stops everything downstream. If the
+Blacksmith GitHub App is uninstalled, capacity is unavailable, or a runner label
+stops matching, no release job starts at all. See ADR-0019.
+
+**Symptom:** after pushing a `v*.*.*` tag, the Release workflow shows every job
+queued and none starting, indefinitely. Jobs waiting on an unavailable runner
+label queue rather than fail, so there is no error message to read.
+
+**Confirm it is a runner problem, not a workflow problem:**
+
+```bash
+gh run list --repo smorinlabs/envgen --workflow release.yml --limit 1
+gh run view <run-id> --repo smorinlabs/envgen
+```
+
+Queued jobs with no logs and no annotations indicate no runner matched.
+
+**What still works, and what does not:**
+
+| Release step | During a Blacksmith outage |
+| --- | --- |
+| Publish to crates.io | Available — dispatch `publish-fallback.yml` (GitHub-hosted) |
+| Create the GitHub release | Blocked — no independent path |
+| Build and upload binaries | Blocked — `build` waits on `github-release` |
+| Homebrew tap PR | Blocked — no independent path |
+| homebrew-core bump PR | Blocked — no independent path |
+
+**Recovery, in order:**
+
+1. Publish the crate so downstream consumers are unblocked. From the Actions
+   tab, run **Publish Fallback (Token)** with the tag, for example `v1.0.7`.
+   This runs on GitHub-hosted `ubuntu-latest` and does not touch Blacksmith.
+   It requires the `CARGO_REGISTRY_TOKEN` secret in the `crates-io` environment.
+2. Wait for Blacksmith to return, then re-run the release: from the Actions tab,
+   dispatch **Release** with the same tag. `publish-crates` is idempotent, so a
+   crate already published in step 1 does not cause a failure.
+3. Only if waiting is not acceptable, produce the GitHub release by hand:
+
+   ```bash
+   git checkout v1.0.7
+   cargo build --release --locked
+   tar -czf envgen-v1.0.7-macOS-ARM64.tar.gz -C target/release envgen
+   gh release create v1.0.7 --repo smorinlabs/envgen \
+     --title v1.0.7 --generate-notes envgen-v1.0.7-macOS-ARM64.tar.gz
+   ```
+
+   This produces only the binary for the machine you build on. Asset names must
+   match the `envgen-<tag>-<os>-<arch>` pattern the automated build uses, where
+   `<os>` is `Linux`, `macOS`, or `Windows` and `<arch>` is `X64` or `ARM64`.
+
+**Do not "fix" this by moving jobs back to GitHub-hosted runners under time
+pressure.** The hosting split that existed before ADR-0019 did not survive an
+outage either, because `meta` was already Blacksmith-hosted and everything
+waits on it.
+
 ## Emergency fallback (temporary)
 
 For migration safety, token-based publish remains available through
