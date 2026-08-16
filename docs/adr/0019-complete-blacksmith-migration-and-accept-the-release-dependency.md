@@ -16,7 +16,7 @@ as an independent recovery path.
 
 Reviewing the release job graph made the actual dependency structure visible:
 
-```
+```text
 meta (Blacksmith, 5s)          <- every release job needs this
 ├── verify (GitHub-hosted, 109s / 130s)
 │   ├── publish-crates (Blacksmith, 98s)   -> covered by publish-fallback.yml
